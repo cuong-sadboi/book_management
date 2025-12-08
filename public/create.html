@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Add Book | Book Management</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-light d-flex flex-column min-vh-100">
+  <div id="navbarInclude" data-include="../include/navbar.html"></div>
+  <div class="layout-wrapper">
+    <div id="sidebarInclude" data-include="../include/sidebar.html"></div>
+    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+    <main class="content-area">
+      <div class="container">
+        <div class="card shadow-sm border-0">
+          <div class="card-header bg-white border-0 pb-0">
+            <h2 class="h4 mb-0">Add new book</h2>
+          </div>
+          <div class="card-body">
+            <form id="bookForm" action="api/books/create.php" method="post" enctype="multipart/form-data" class="row g-3">
+              <div class="col-md-6">
+                <label for="isbn" class="form-label">Book ID *</label>
+                <input type="text" id="isbn" name="isbn" class="form-control" required>
+              </div>
+              <div class="col-md-6">
+                <label for="title" class="form-label">Title *</label>
+                <input type="text" id="title" name="title" class="form-control" required>
+              </div>
+              <div class="col-md-6">
+                <label for="author" class="form-label">Author</label>
+                <select id="author" name="author" class="form-select">
+                  <option value="">-- Select author --</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label for="publisher" class="form-label">Publisher</label>
+                <select id="publisher" name="publisher" class="form-select">
+                  <option value="">-- Select publisher --</option>
+                </select>
+              </div>
+              <div class="col-md-4">
+                <label for="year" class="form-label">Year Published</label>
+                <input type="number" id="year" name="year" class="form-control" min="0" max="2100">
+              </div>
+              <div class="col-md-4">
+                <label for="genre" class="form-label">Genre</label>
+                <select id="genre" name="genre" class="form-select">
+                  <option value="">-- Select genre --</option>
+                </select>
+              </div>
+              <div class="col-md-4">
+                <label for="price" class="form-label">Price *</label>
+                <input type="number" step="0.01" id="price" name="price" class="form-control" required>
+              </div>
+              <div class="col-md-4">
+                <label for="stock" class="form-label">Stock *</label>
+                <input type="number" id="stock" name="stock" class="form-control" min="0" required>
+              </div>
+              <div class="col-md-4">
+                <label for="status" class="form-label">Status *</label>
+                <select id="status" name="status" class="form-select" required>
+                  <option value="published">Published</option>
+                  <option value="out_of_print">Out of Print</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label for="cover_image" class="form-label">Cover image</label>
+                <input type="file" id="cover_image" name="cover_image" class="form-control" accept="image/png,image/jpeg,image/webp">
+                <div class="form-text">PNG, JPG, or WebP up to 2 MB.</div>
+                <img id="coverThumb" src="https://via.placeholder.com/120x160?text=Preview" alt="Cover preview" class="mt-2 border rounded d-none" style="max-width:120px; height:auto;">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label d-block">Rental</label>
+                <div class="form-check form-switch">
+                  <input class="form-check-input" type="checkbox" id="isRental" name="is_rental" value="1">
+                  <label class="form-check-label" for="isRental">Allow rental</label>
+                </div>
+              </div>
+              <div class="col-12">
+                <label for="shelf_location" class="form-label">Shelf location</label>
+                <input type="text" id="shelf_location" name="shelf_location" class="form-control" placeholder="e.g., A3-12">
+              </div>
+              <div class="col-12 d-flex justify-content-end gap-2 pt-3">
+                <a href="index.html" class="btn btn-outline-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary">Save book</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <div id="footerInclude" class="layout-footer" data-include="../include/footer.html"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+  <script src="js/layout.js"></script>
+  <script>
+    document.querySelectorAll('[data-include]').forEach((node) => {
+      fetch(node.dataset.include)
+        .then((res) => (res.ok ? res.text() : Promise.reject(res.statusText)))
+        .then((html) => {
+          node.innerHTML = html;
+          window.initLayout?.();
+        })
+        .catch(() => {
+          node.innerHTML = '<div class="alert alert-warning m-0">Unable to load layout section.</div>';
+        });
+    });
+  </script>
+  <script>
+    // Load authors into the select
+    (() => {
+      const authorSelect = document.getElementById('author');
+      if (!authorSelect) return;
+
+      const setOptions = (items) => {
+        authorSelect.innerHTML = '<option value="">-- Select author --</option>';
+        if (!items.length) {
+          authorSelect.innerHTML += '<option value="" disabled>No authors found</option>';
+          return;
+        }
+        const frag = document.createDocumentFragment();
+        items.forEach((a) => {
+          const opt = document.createElement('option');
+          opt.value = a.name ?? '';
+          opt.textContent = a.name ?? '';
+          frag.appendChild(opt);
+        });
+        authorSelect.appendChild(frag);
+      };
+
+      fetch('api/authors.php?per_page=1000')
+        .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
+        .then(({ ok, data }) => {
+          if (!ok || data?.error) throw new Error(data?.error || 'Unable to load authors');
+          setOptions(data.data ?? []);
+        })
+        .catch(() => setOptions([]));
+    })();
+    // Load publishers into the select
+    (() => {
+      const publisherSelect = document.getElementById('publisher');
+      if (!publisherSelect) return;
+
+      const setOptions = (items) => {
+        publisherSelect.innerHTML = '<option value="">-- Select publisher --</option>';
+        if (!items.length) {
+          publisherSelect.innerHTML += '<option value="" disabled>No publishers found</option>';
+          return;
+        }
+        const frag = document.createDocumentFragment();
+        items.forEach((p) => {
+          const opt = document.createElement('option');
+          opt.value = p.name ?? '';
+          opt.textContent = p.name ?? '';
+          frag.appendChild(opt);
+        });
+        publisherSelect.appendChild(frag);
+      };
+
+      fetch('api/publishers.php?per_page=1000')
+        .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
+        .then(({ ok, data }) => {
+          if (!ok || data?.error) throw new Error(data?.error || 'Unable to load publishers');
+          setOptions(data.data ?? []);
+        })
+        .catch(() => setOptions([]));
+    })();
+    // Load genres into the select
+    (() => {
+      const genreSelect = document.getElementById('genre');
+      if (!genreSelect) return;
+
+      const setOptions = (items) => {
+        genreSelect.innerHTML = '<option value="">-- Select genre --</option>';
+        if (!items.length) {
+          genreSelect.innerHTML += '<option value="" disabled>No genres found</option>';
+          return;
+        }
+        const frag = document.createDocumentFragment();
+        items.forEach((g) => {
+          const opt = document.createElement('option');
+          opt.value = g.name ?? '';
+          opt.textContent = g.name ?? '';
+          frag.appendChild(opt);
+        });
+        genreSelect.appendChild(frag);
+      };
+
+      fetch('api/genres.php?per_page=1000')
+        .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
+        .then(({ ok, data }) => {
+          if (!ok || data?.error) throw new Error(data?.error || 'Unable to load genres');
+          setOptions(data.data ?? []);
+        })
+        .catch(() => setOptions([]));
+    })();
+  </script>
+  <script>
+    // Cover preview
+    (() => {
+      const fileInput = document.getElementById('cover_image');
+      const thumb = document.getElementById('coverThumb');
+      if (!fileInput || !thumb) return;
+      let objectUrl;
+      fileInput.addEventListener('change', () => {
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        const file = fileInput.files?.[0];
+        if (file) {
+          objectUrl = URL.createObjectURL(file);
+          thumb.src = objectUrl;
+          thumb.classList.remove('d-none');
+        } else {
+          thumb.classList.add('d-none');
+          thumb.src = 'https://via.placeholder.com/120x160?text=Preview';
+        }
+      });
+    })();
+  </script>
+  <script>
+    (() => {
+      const form = document.getElementById('bookForm');
+      if (!form) return;
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const originalText = submitBtn?.textContent;
+        submitBtn && (submitBtn.disabled = true, submitBtn.textContent = 'Saving...');
+
+        try {
+          const response = await fetch(form.action, {
+            method: 'POST',
+            headers: {
+              'X-Requested-With': 'XMLHttpRequest',
+              Accept: 'application/json',
+            },
+            body: new FormData(form),
+          });
+
+          const raw = await response.text();
+          let result;
+          try {
+            result = raw ? JSON.parse(raw) : null;
+          } catch {
+            throw new Error(raw || 'Invalid response from server.');
+          }
+
+          if (!response.ok || !result?.success) {
+            throw new Error(result?.error ?? 'Unable to save data.');
+          }
+
+          window.location.href = 'index.html?created=1';
+        } catch (error) {
+          alert(error.message || 'An unexpected error occurred.');
+        } finally {
+          submitBtn && (submitBtn.disabled = false, submitBtn.textContent = originalText);
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

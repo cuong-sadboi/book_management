@@ -1,0 +1,35 @@
+<aside class="sidebar">
+  <!-- Diagnostic: sidebar markup updated; confirm this appears after Ctrl+F5 -->
+  <div class="sidebar__section">
+    <p class="sidebar__label">MAIN</p>
+    <a href="index.html" class="sidebar__link active">
+      <span>Dashboard</span>
+    </a>
+  </div>
+
+  <div class="sidebar__section">
+    <p class="sidebar__label">COMPONENTS</p>
+
+    <button class="sidebar__toggle" type="button" data-submenu-target="sidebarCreate" aria-expanded="false">
+      <span>Create</span>
+      <span class="sidebar__caret" aria-hidden="true">▸</span>
+    </button>
+    <div id="sidebarCreate" class="sidebar__submenu">
+      <a href="create.html" class="sidebar__link">Create Book</a>
+      <a href="create-author.html" class="sidebar__link">Create Author</a>
+      <a href="create-publisher.html" class="sidebar__link">Create Publisher</a>
+      <a href="create-genre.html" class="sidebar__link">Create Genre</a>
+    </div>
+
+    <button class="sidebar__toggle" type="button" data-submenu-target="sidebarTable" aria-expanded="false">
+      <span>Table</span>
+      <span class="sidebar__caret" aria-hidden="true">▸</span>
+    </button>
+    <div id="sidebarTable" class="sidebar__submenu">
+      <a href="index.html" class="sidebar__link">Table Book</a>
+      <a href="index-author.html" class="sidebar__link">Table Author</a>
+      <a href="index-publisher.html" class="sidebar__link">Table Publisher</a>
+      <a href="index-genre.html" class="sidebar__link">Table Genre</a>
+    </div>
+  </div>
+</aside>
