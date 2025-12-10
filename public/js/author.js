@@ -27,6 +27,11 @@ const AUTHOR_API = 'api/authors.php';
 	let debounceId;
 	let currentAbortController;
 
+	const updateSelectAllState = () => {
+		if (!selectAll) return;
+		selectAll.checked = !!tbody.querySelector('input[type="checkbox"]:checked');
+	};
+
 	const escapeHtml = (value = '') =>
 		value.toString().replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 
@@ -65,13 +70,14 @@ const AUTHOR_API = 'api/authors.php';
 
 	function renderRows(authors) {
 		if (!authors.length) {
-			tbody.innerHTML = '<tr><td colspan="6">Không có dữ liệu.</td></tr>';
+			tbody.innerHTML = '<tr><td colspan="7">Không có dữ liệu.</td></tr>';
 			return;
 		}
 		tbody.innerHTML = authors.map((author) => `
 			<tr data-id="${author.id ?? ''}">
 				<td><input type="checkbox" data-id="${author.id ?? ''}"></td>
 				<td>${escapeHtml(author.name ?? '')}</td>
+				<td>${escapeHtml(author.email ?? '')}</td>
 				<td>${escapeHtml(author.nationality ?? '')}</td>
 				<td>${author.birth_year ?? ''}</td>
 				<td class="text-truncate" style="max-width: 260px;">${escapeHtml(author.bio ?? '')}</td>
@@ -92,20 +98,49 @@ const AUTHOR_API = 'api/authors.php';
 	function renderPagination(total) {
 		const totalPages = Math.max(1, Math.ceil(total / state.limit));
 		pagination.innerHTML = '';
-		for (let page = 1; page <= totalPages; page += 1) {
+
+		const addBtn = (label, page, disabled = false, active = false) => {
 			const btn = document.createElement('button');
-			btn.textContent = page;
-			if (page === state.page) {
-				btn.disabled = true;
-				btn.classList.add('active');
-			}
+			btn.textContent = label;
+			if (active) btn.classList.add('active');
+			btn.disabled = disabled;
 			btn.addEventListener('click', () => {
-				if (page === state.page) return;
+				if (disabled || page === state.page || page < 1 || page > totalPages) return;
 				state.page = page;
 				loadAuthors();
 			});
 			pagination.appendChild(btn);
+		};
+
+		addBtn('Prev', state.page - 1, state.page <= 1);
+
+		const windowSize = 2;
+		const start = Math.max(1, state.page - windowSize);
+		const end = Math.min(totalPages, state.page + windowSize);
+
+		if (start > 1) {
+			addBtn('1', 1, false, state.page === 1);
+			if (start > 2) {
+				const ellipsis = document.createElement('span');
+				ellipsis.textContent = '...';
+				pagination.appendChild(ellipsis);
+			}
 		}
+
+		for (let page = start; page <= end; page += 1) {
+			addBtn(String(page), page, false, page === state.page);
+		}
+
+		if (end < totalPages) {
+			if (end < totalPages - 1) {
+				const ellipsis = document.createElement('span');
+				ellipsis.textContent = '...';
+				pagination.appendChild(ellipsis);
+			}
+			addBtn(String(totalPages), totalPages, false, state.page === totalPages);
+		}
+
+		addBtn('Next', state.page + 1, state.page >= totalPages);
 	}
 
 	perPageSelect.addEventListener('change', () => {
@@ -131,6 +166,10 @@ const AUTHOR_API = 'api/authors.php';
 		tbody.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
 			checkbox.checked = event.target.checked;
 		});
+	});
+
+	tbody.addEventListener('change', (event) => {
+		if (event.target.matches('input[type="checkbox"]')) updateSelectAllState();
 	});
 
 	btnDeleteSelected.addEventListener('click', () => {
@@ -203,3 +242,31 @@ const AUTHOR_API = 'api/authors.php';
 
 	loadAuthors();
 })();
+
+const BOOKS_API = 'api/books.php';
+
+const isAuthorInUse = async (name, id) => {
+	const hidden = new Set(getHiddenBookIds().map(String));
+	const keys = [];
+	if (name) keys.push(name);
+	if (id) keys.push(String(id));
+	for (const key of keys) {
+		let res, payload;
+		try {
+			res = await fetch(`${BOOKS_API}?author=${encodeURIComponent(key)}&per_page=1000`);
+			const raw = await res.text();
+			try { payload = raw ? JSON.parse(raw) : null; } catch { payload = null; }
+		} catch (err) {
+			console.warn('Không thể gọi books API:', err);
+			continue; // allow delete if API fails
+		}
+		if (!res.ok) {
+			console.warn('Books API trả lỗi:', payload?.error);
+			continue; // allow delete if API errors
+		}
+		const list = payload?.data ?? [];
+		const inUse = list.some((b) => b?.author === key && !hidden.has(String(b.id ?? '')));
+		if (inUse) return true;
+	}
+	return false;
+};

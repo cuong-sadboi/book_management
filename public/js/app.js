@@ -10,6 +10,7 @@ const API = 'api/db.php';
   const btnAdd = document.getElementById('btnAdd');
   const btnDeleteSelected = document.getElementById('btnDeleteSelected');
   const selectAll = document.getElementById('selectAll');
+  const selectedCountEl = document.getElementById('selectedCount');
 
   const HIDDEN_KEY = 'book_hidden_ids';
   const getHiddenIds = () => {
@@ -23,6 +24,19 @@ const API = 'api/db.php';
     localStorage.setItem(HIDDEN_KEY, JSON.stringify(Array.from(set)));
   };
 
+  const updateSelectAllState = () => {
+    if (!selectAll) return;
+    const anyChecked = !!tbody.querySelector('input[type="checkbox"]:checked');
+    selectAll.checked = anyChecked && Array.from(tbody.querySelectorAll('input[type="checkbox"]')).every((c) => c.checked);
+    updateSelectedCount();
+  };
+
+  const updateSelectedCount = () => {
+    if (!selectedCountEl) return;
+    const count = tbody.querySelectorAll('input[type="checkbox"]:checked').length;
+    selectedCountEl.textContent = `Selected: ${count}`;
+  };
+
   const state = { q: '', page: 1, limit: Number(perPageSelect.value) || 10 };
   const currencyFormatter = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' });
   const escapeHtml = (value = '') =>
@@ -32,11 +46,7 @@ const API = 'api/db.php';
 
   async function loadBooks() {
     const hidden = getHiddenIds();
-    const fetchLimit = Math.min(200, state.limit + hidden.size);
-    const params = new URLSearchParams({
-      limit: fetchLimit,
-      page: state.page,
-    });
+    const params = new URLSearchParams({ limit: 1000, page: 1 }); // fetch all in one go
     if (state.q) params.append('q', state.q);
 
     currentAbortController?.abort();
@@ -47,26 +57,27 @@ const API = 'api/db.php';
       const response = await fetch(`${API}?${params.toString()}`, { signal: controller.signal });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const payload = await response.json();
-      const books = payload.data ?? payload.records ?? [];
-      const total = payload.meta?.total ?? payload.total ?? books.length;
+      const all = payload.data ?? payload.records ?? [];
+      const visible = all.filter((b) => !hidden.has(String(b.id ?? '')));
+      const totalVisible = visible.length;
 
-      const hiddenCountInResult = books.reduce((c, b) => c + (hidden.has(String(b.id ?? '')) ? 1 : 0), 0);
-      const visibleBooks = books.filter((b) => !hidden.has(String(b.id ?? ''))).slice(0, state.limit);
-      const totalVisible = Math.max(0, total - hiddenCountInResult);
-
-      if (totalVisible > 0 && visibleBooks.length === 0 && state.page > 1) {
-        state.page = Math.max(1, Math.ceil(totalVisible / state.limit));
-        return loadBooks();
+      const totalPages = Math.max(1, Math.ceil(totalVisible / state.limit));
+      if (state.page > totalPages) {
+        state.page = totalPages;
       }
+      const start = (state.page - 1) * state.limit;
+      const pageItems = visible.slice(start, start + state.limit);
 
-      renderRows(visibleBooks);
+      renderRows(pageItems);
       renderPagination(totalVisible);
       selectAll.checked = false;
+      updateSelectedCount();
     } catch (error) {
       if (error.name === 'AbortError') return;
       tbody.innerHTML = `<tr><td colspan="13">Không thể tải dữ liệu: ${escapeHtml(error.message)}</td></tr>`;
       pagination.innerHTML = '';
       selectAll.checked = false;
+      updateSelectedCount();
     } finally {
       if (currentAbortController === controller) currentAbortController = null;
     }
@@ -152,6 +163,11 @@ const API = 'api/db.php';
     tbody.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
       checkbox.checked = event.target.checked;
     });
+    updateSelectedCount();
+  });
+
+  tbody.addEventListener('change', (event) => {
+    if (event.target.matches('input[type="checkbox"]')) updateSelectAllState();
   });
 
   btnDeleteSelected.addEventListener('click', () => {
@@ -168,6 +184,7 @@ const API = 'api/db.php';
     ids.forEach((id) => hidden.add(String(id)));
     setHiddenIds(hidden);
     loadBooks();
+    updateSelectedCount();
   });
 
   btnAdd.addEventListener('click', () => {
@@ -183,6 +200,7 @@ const API = 'api/db.php';
         hidden.add(String(deleteBtn.dataset.id));
         setHiddenIds(hidden);
         loadBooks();
+        updateSelectedCount();
       }
       return;
     }
@@ -201,4 +219,5 @@ const API = 'api/db.php';
   });
 
   loadBooks();
+  updateSelectedCount();
 })();

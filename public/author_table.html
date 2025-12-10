@@ -14,8 +14,7 @@
     <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
     <main class="content-area">
       <div class="container py-4">
-        <h1 class="mb-4 text-primary">Author Management</h1>
-
+        <h1 class="mb-4 text-primary" style="font-size: 25px;">Author Management</h1>
         <div class="controls row g-2 align-items-center mb-4">
           <div class="col-12 col-md-4">
             <input id="authorSearch" class="form-control" type="search" placeholder="Search by name, nationality...">
@@ -40,6 +39,7 @@
               <tr>
                 <th><input id="authorSelectAll" type="checkbox"></th>
                 <th>Name</th>
+                <th>Email</th>
                 <th>Nationality</th>
                 <th>Birth Year</th>
                 <th>Bio</th>
@@ -127,6 +127,7 @@
           <tr data-id="${author.id ?? ''}">
             <td><input type="checkbox" data-id="${author.id ?? ''}"></td>
             <td>${escapeHtml(author.name ?? '')}</td>
+            <td>${escapeHtml(author.email ?? '')}</td>
             <td>${escapeHtml(author.nationality ?? '')}</td>
             <td>${author.birth_year ?? ''}</td>
             <td class="text-truncate" style="max-width: 260px;">${escapeHtml(author.bio ?? '')}</td>

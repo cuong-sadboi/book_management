@@ -43,6 +43,40 @@ function detect_uploaded_mime(string $path): ?string {
 	return $info['mime'] ?? null;
 }
 
+function resize_image_max(string $path, string $mime, int $maxW = 500, int $maxH = 750): bool {
+	$info = @getimagesize($path);
+	if (!$info) return false;
+	[$w, $h] = $info;
+	if ($w <= $maxW && $h <= $maxH) return true;
+
+	$ratio = min($maxW / $w, $maxH / $h, 1);
+	$newW = max(1, (int)round($w * $ratio));
+	$newH = max(1, (int)round($h * $ratio));
+
+	$src = match ($mime) {
+		'image/jpeg' => imagecreatefromjpeg($path),
+		'image/png'  => imagecreatefrompng($path),
+		'image/webp' => function_exists('imagecreatefromwebp') ? imagecreatefromwebp($path) : null,
+		default      => null,
+	};
+	if (!$src) return false;
+
+	$dst = imagecreatetruecolor($newW, $newH);
+	imagealphablending($dst, false);
+	imagesavealpha($dst, true);
+	if (!imagecopyresampled($dst, $src, 0, 0, 0, 0, $newW, $newH, $w, $h)) return false;
+
+	$saveOk = match ($mime) {
+		'image/jpeg' => imagejpeg($dst, $path, 90),
+		'image/png'  => imagepng($dst, $path, 6),
+		'image/webp' => function_exists('imagewebp') ? imagewebp($dst, $path, 90) : false,
+		default      => false,
+	};
+	imagedestroy($src);
+	imagedestroy($dst);
+	return (bool)$saveOk;
+}
+
 try {
 	$pdo = new PDO($dsn, $config['db_user'], $config['db_pass'], $options);
 } catch (PDOException $e) {
@@ -96,6 +130,10 @@ if (!empty($_FILES['cover_image']['tmp_name'])) {
 	$destination = $uploadRoot . '/' . $filename;
 	if (!move_uploaded_file($file['tmp_name'], $destination)) {
 		respond_error('Unable to store cover image.', 500, $expectsJson);
+	}
+	if (!resize_image_max($destination, $mime)) {
+		@unlink($destination);
+		respond_error('Unable to resize cover image.', 500, $expectsJson);
 	}
 	if ($coverPath && is_file(dirname(__DIR__, 2) . '/' . $coverPath)) {
 		@unlink(dirname(__DIR__, 2) . '/' . $coverPath);

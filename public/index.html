@@ -28,7 +28,7 @@
     <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
     <main class="content-area">
       <div class="container py-4" data-book-container>
-        <h1 class="mb-4 text-primary">Book Management</h1>
+        <h1 class="mb-4 text-primary" style="font-size: 25px;">Book Management</h1>
 
         <div class="controls row g-2 align-items-center mb-4">
           <div class="col-12 col-md-4">
@@ -39,7 +39,7 @@
               <option value="5">5</option><option value="10" selected>10</option><option value="25">25</option>
             </select>
           </div>
-          <div class="col d-flex flex-wrap gap-2">
+          <div class="col d-flex flex-wrap gap-2 justify-content-end">
             <button id="btnRefresh"  class="btn btn-outline-primary">Refresh</button>
             <button id="btnAdd" class="btn btn-primary">Create</button>
             <button id="btnDeleteSelected" class="btn btn-danger">Delete Selected</button>
@@ -69,7 +69,10 @@
           </table>
         </div>
 
-        <div class="pagination btn-group flex-wrap" id="pagination"></div>
+        <div class="d-flex align-items-center justify-content-between">
+          <div id="selectedCount" class="text-muted small">Selected: 0</div>
+          <div class="pagination btn-group flex-wrap" id="pagination"></div>
+        </div>
       </div>
     </main>
   </div>

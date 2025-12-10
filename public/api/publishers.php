@@ -88,19 +88,29 @@ if ($method === 'GET') {
 if ($method === 'POST') {
 	$name = trim($body['name'] ?? '');
 	if ($name === '') respond(['error' => 'name required'], 422);
+
+	$dup = $pdo->prepare('SELECT COUNT(*) FROM publishers WHERE name = :name');
+	$dup->execute([':name' => $name]);
+	if ((int)$dup->fetchColumn() > 0) respond(['error' => 'Publisher name already exists.'], 422);
+
 	$country = trim($body['country'] ?? '');
 	$founded_year = $body['founded_year'] !== null ? (int)$body['founded_year'] : null;
 	$website = trim($body['website'] ?? '');
 	$note = $body['note'] ?? null;
 
-	$stmt = $pdo->prepare('INSERT INTO publishers (name, country, founded_year, website, note) VALUES (:name, :country, :founded_year, :website, :note)');
-	$stmt->execute([
-		':name' => $name,
-		':country' => $country,
-		':founded_year' => $founded_year ?: null,
-		':website' => $website,
-		':note' => $note,
-	]);
+	try {
+		$stmt = $pdo->prepare('INSERT INTO publishers (name, country, founded_year, website, note) VALUES (:name, :country, :founded_year, :website, :note)');
+		$stmt->execute([
+			':name' => $name,
+			':country' => $country,
+			':founded_year' => $founded_year ?: null,
+			':website' => $website,
+			':note' => $note,
+		]);
+	} catch (PDOException $e) {
+		if (($e->errorInfo[1] ?? null) === 1062) respond(['error' => 'Publisher name already exists.'], 422);
+		throw $e;
+	}
 	$id = (int)$pdo->lastInsertId();
 	$stmt = $pdo->prepare('SELECT * FROM publishers WHERE id = :id');
 	$stmt->execute([':id' => $id]);
@@ -112,7 +122,18 @@ if ($method === 'PUT') {
 	$id = (int)$body['id'];
 	$fields = [];
 	$params = [':id' => $id];
-	foreach (['name', 'country', 'website', 'note'] as $col) {
+
+	if (array_key_exists('name', $body)) {
+		$name = trim((string)$body['name']);
+		if ($name === '') respond(['error' => 'name required'], 422);
+		$dup = $pdo->prepare('SELECT COUNT(*) FROM publishers WHERE name = :name AND id <> :id');
+		$dup->execute([':name' => $name, ':id' => $id]);
+		if ((int)$dup->fetchColumn() > 0) respond(['error' => 'Publisher name already exists.'], 422);
+		$fields[] = 'name = :name';
+		$params[':name'] = $name;
+	}
+
+	foreach (['country', 'website', 'note'] as $col) {
 		if (array_key_exists($col, $body)) {
 			$fields[] = "$col = :$col";
 			$params[":$col"] = $body[$col];

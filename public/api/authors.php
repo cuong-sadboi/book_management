@@ -90,14 +90,23 @@ if ($method === 'GET') {
 // CREATE
 if ($method === 'POST') {
 	$name = trim($body['name'] ?? '');
+	$email = trim($body['email'] ?? '');
 	if ($name === '') respond(['error' => 'name required'], 422);
+	if ($email === '') respond(['error' => 'email required'], 422);
+
+	// unique email check
+	$dupStmt = $pdo->prepare('SELECT COUNT(*) FROM authors WHERE email = :email');
+	$dupStmt->execute([':email' => $email]);
+	if ((int)$dupStmt->fetchColumn() > 0) respond(['error' => 'Email already exists.'], 422);
+
 	$nationality = trim($body['nationality'] ?? '');
 	$birth_year = $body['birth_year'] !== null ? (int)$body['birth_year'] : null;
 	$bio = $body['bio'] ?? null;
 
-	$stmt = $pdo->prepare('INSERT INTO authors (name, nationality, birth_year, bio) VALUES (:name, :nationality, :birth_year, :bio)');
+	$stmt = $pdo->prepare('INSERT INTO authors (name, email, nationality, birth_year, bio) VALUES (:name, :email, :nationality, :birth_year, :bio)');
 	$stmt->execute([
 		':name' => $name,
+		':email' => $email,
 		':nationality' => $nationality,
 		':birth_year' => $birth_year ?: null,
 		':bio' => $bio,
@@ -114,6 +123,17 @@ if ($method === 'PUT') {
 	$id = (int)$body['id'];
 	$fields = [];
 	$params = [':id' => $id];
+
+	if (array_key_exists('email', $body)) {
+		$email = trim((string)$body['email']);
+		if ($email === '') respond(['error' => 'email required'], 422);
+		$check = $pdo->prepare('SELECT COUNT(*) FROM authors WHERE email = :email AND id <> :id');
+		$check->execute([':email' => $email, ':id' => $id]);
+		if ((int)$check->fetchColumn() > 0) respond(['error' => 'Email already exists.'], 422);
+		$fields[] = 'email = :email';
+		$params[':email'] = $email;
+	}
+
 	foreach (['name', 'nationality', 'bio'] as $col) {
 		if (array_key_exists($col, $body)) {
 			$fields[] = "$col = :$col";

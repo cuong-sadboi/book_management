@@ -27,6 +27,10 @@
 								<input type="text" id="name" class="form-control" required>
 							</div>
 							<div class="col-md-6">
+								<label for="email" class="form-label">Email *</label>
+								<input type="email" id="email" class="form-control" required>
+							</div>
+							<div class="col-md-6">
 								<label for="nationality" class="form-label">Nationality</label>
 								<input type="text" id="nationality" class="form-control">
 							</div>
@@ -78,6 +82,7 @@
 					const author = data.data;
 					form.querySelector('#authorId').value = author.id;
 					form.querySelector('#name').value = author.name ?? '';
+					form.querySelector('#email').value = author.email ?? '';
 					form.querySelector('#nationality').value = author.nationality ?? '';
 					form.querySelector('#birth_year').value = author.birth_year ?? '';
 					form.querySelector('#bio').value = author.bio ?? '';
@@ -93,6 +98,7 @@
 					const payload = {
 						id: Number(form.querySelector('#authorId').value),
 						name: form.querySelector('#name').value.trim(),
+						email: form.querySelector('#email').value.trim(),
 						nationality: form.querySelector('#nationality').value.trim(),
 						birth_year: form.querySelector('#birth_year').value ? Number(form.querySelector('#birth_year').value) : null,
 						bio: form.querySelector('#bio').value.trim(),

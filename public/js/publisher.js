@@ -19,6 +19,11 @@
   let debounceId;
   let currentAbortController;
 
+  const updateSelectAllState = () => {
+    if (!selectAll) return;
+    selectAll.checked = !!tbody.querySelector('input[type="checkbox"]:checked');
+  };
+
   const escapeHtml = (value = '') =>
     value.toString().replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 
@@ -118,6 +123,10 @@
     tbody.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
       checkbox.checked = event.target.checked;
     });
+  });
+
+  tbody.addEventListener('change', (event) => {
+    if (event.target.matches('input[type="checkbox"]')) updateSelectAllState();
   });
 
   btnDeleteSelected?.addEventListener('click', () => {
