@@ -7,7 +7,9 @@
   const btnRefresh = document.getElementById('btnGenreRefresh');
   const btnAdd = document.getElementById('btnGenreAdd');
   const btnDeleteSelected = document.getElementById('btnGenreDeleteSelected');
+  const btnExportExcel = document.getElementById('btnGenreExportExcel');
   const selectAll = document.getElementById('genreSelectAll');
+  const selectedCountEl = document.getElementById('genreSelectedCount');
 
   const BOOK_HIDDEN_KEY = 'book_hidden_ids';
   const getHiddenBookIds = () => {
@@ -15,41 +17,92 @@
     catch { return []; }
   };
 
+  // Track all IDs and selected IDs across pages
+  let allGenreIds = [];
+  let selectedIds = new Set();
+  let allGenresData = []; // Store all genres data for export
+
   const state = { q: '', page: 1, limit: Number(perPageSelect?.value) || 10 };
   let debounceId;
   let currentAbortController;
 
   const updateSelectAllState = () => {
     if (!selectAll) return;
-    selectAll.checked = !!tbody.querySelector('input[type="checkbox"]:checked');
+    if (allGenreIds.length === 0) {
+      selectAll.checked = false;
+      selectAll.indeterminate = false;
+    } else if (selectedIds.size === allGenreIds.length) {
+      selectAll.checked = true;
+      selectAll.indeterminate = false;
+    } else if (selectedIds.size > 0) {
+      selectAll.checked = false;
+      selectAll.indeterminate = true;
+    } else {
+      selectAll.checked = false;
+      selectAll.indeterminate = false;
+    }
+    syncCheckboxes();
+    updateSelectedCount();
+  };
+
+  const syncCheckboxes = () => {
+    tbody.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+      cb.checked = selectedIds.has(String(cb.dataset.id));
+    });
+  };
+
+  const updateSelectedCount = () => {
+    if (!selectedCountEl) return;
+    selectedCountEl.textContent = `Selected: ${selectedIds.size} / ${allGenreIds.length}`;
   };
 
   const escapeHtml = (value = '') =>
     value.toString().replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 
   async function loadGenres() {
-    const params = new URLSearchParams({ page: state.page, per_page: state.limit });
-    if (state.q) params.append('q', state.q);
+    // Fetch all to get total IDs
+    const allParams = new URLSearchParams({ page: 1, per_page: 1000 });
+    if (state.q) allParams.append('q', state.q);
 
     currentAbortController?.abort();
     const controller = new AbortController();
     currentAbortController = controller;
 
     try {
-      const res = await fetch(`${API}?${params.toString()}`, { signal: controller.signal });
+      const res = await fetch(`${API}?${allParams.toString()}`, { signal: controller.signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const payload = await res.json();
-      const genres = payload.data ?? [];
-      const total = payload.meta?.total ?? genres.length;
+      const allGenres = payload.data ?? [];
+      
+      // Store all genre IDs and data
+      allGenreIds = allGenres.map((g) => String(g.id));
+      allGenresData = allGenres; // Store for export
+      
+      // Clean up selectedIds
+      selectedIds = new Set([...selectedIds].filter((id) => allGenreIds.includes(id)));
 
-      renderRows(genres);
+      const total = payload.meta?.total ?? allGenres.length;
+      const totalPages = Math.max(1, Math.ceil(total / state.limit));
+      
+      if (state.page > totalPages) {
+        state.page = totalPages;
+      }
+
+      // Get current page items
+      const start = (state.page - 1) * state.limit;
+      const pageItems = allGenres.slice(start, start + state.limit);
+
+      renderRows(pageItems);
       renderPagination(total);
-      selectAll && (selectAll.checked = false);
+      updateSelectAllState();
     } catch (error) {
       if (error.name === 'AbortError') return;
       tbody.innerHTML = `<tr><td colspan="4">Không thể tải dữ liệu: ${escapeHtml(error.message)}</td></tr>`;
       pagination.innerHTML = '';
-      selectAll && (selectAll.checked = false);
+      allGenreIds = [];
+      allGenresData = [];
+      selectedIds.clear();
+      updateSelectAllState();
     } finally {
       if (currentAbortController === controller) currentAbortController = null;
     }
@@ -62,7 +115,7 @@
     }
     tbody.innerHTML = rows.map((g) => `
       <tr data-id="${g.id ?? ''}">
-        <td><input type="checkbox" data-id="${g.id ?? ''}"></td>
+        <td><input type="checkbox" data-id="${g.id ?? ''}" ${selectedIds.has(String(g.id)) ? 'checked' : ''}></td>
         <td>${escapeHtml(g.name ?? '')}</td>
         <td class="text-truncate" style="max-width: 320px;">${escapeHtml(g.description ?? '')}</td>
         <td>
@@ -111,26 +164,41 @@
       if (state.q === nextQuery) return;
       state.q = nextQuery;
       state.page = 1;
+      selectedIds.clear();
       loadGenres();
     }, 300);
   });
 
-  btnRefresh?.addEventListener('click', () => loadGenres());
+  btnRefresh?.addEventListener('click', () => {
+    selectedIds.clear();
+    loadGenres();
+  });
 
+  // Select All now toggles ALL records across all pages
   selectAll?.addEventListener('change', (event) => {
-    tbody.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
-      checkbox.checked = event.target.checked;
-    });
+    if (event.target.checked) {
+      selectedIds = new Set(allGenreIds);
+    } else {
+      selectedIds.clear();
+    }
+    syncCheckboxes();
+    updateSelectAllState();
   });
 
   tbody.addEventListener('change', (event) => {
-    if (event.target.matches('input[type="checkbox"]')) updateSelectAllState();
+    if (event.target.matches('input[type="checkbox"]')) {
+      const id = String(event.target.dataset.id);
+      if (event.target.checked) {
+        selectedIds.add(id);
+      } else {
+        selectedIds.delete(id);
+      }
+      updateSelectAllState();
+    }
   });
 
   btnDeleteSelected?.addEventListener('click', () => {
-    const ids = Array.from(tbody.querySelectorAll('input[type="checkbox"]:checked'))
-      .map((checkbox) => checkbox.dataset.id)
-      .filter(Boolean);
+    const ids = Array.from(selectedIds);
     if (!ids.length) {
       alert('Please select at least one genre.');
       return;
@@ -150,12 +218,36 @@
       })
       .then(({ ok, data, raw }) => {
         if (!ok || data?.error) throw new Error(data?.error || raw || 'Unable to delete.');
+        selectedIds.clear();
         loadGenres();
       })
       .catch((error) => alert(error.message || 'Delete failed.'));
   });
 
   btnAdd?.addEventListener('click', () => { window.location.href = 'create-genre.html'; });
+
+  // Export Excel functionality
+  btnExportExcel?.addEventListener('click', () => {
+    if (!selectedIds.size) {
+      alert('Please select at least one genre to export.');
+      return;
+    }
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = 'api/genres/export.php';
+    form.style.display = 'none';
+
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'ids';
+    input.value = JSON.stringify(Array.from(selectedIds));
+    form.appendChild(input);
+
+    document.body.appendChild(form);
+    form.submit();
+    document.body.removeChild(form);
+  });
 
   tbody.addEventListener('click', (event) => {
     const deleteBtn = event.target.closest('.btn-delete');
@@ -175,6 +267,7 @@
         })
         .then(({ ok, data, raw }) => {
           if (!ok || data?.error) throw new Error(data?.error || raw || 'Unable to delete genre.');
+          selectedIds.delete(String(deleteBtn.dataset.id));
           loadGenres();
         })
         .catch((error) => alert(error.message || 'Delete failed.'));

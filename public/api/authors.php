@@ -121,6 +121,14 @@ if ($method === 'POST') {
 if ($method === 'PUT') {
 	if (!isset($body['id'])) respond(['error' => 'id required'], 422);
 	$id = (int)$body['id'];
+	
+	// Get old name before update
+	$oldStmt = $pdo->prepare('SELECT name FROM authors WHERE id = :id');
+	$oldStmt->execute([':id' => $id]);
+	$oldData = $oldStmt->fetch();
+	if (!$oldData) respond(['error' => 'Author not found'], 404);
+	$oldName = $oldData['name'];
+	
 	$fields = [];
 	$params = [':id' => $id];
 
@@ -134,10 +142,12 @@ if ($method === 'PUT') {
 		$params[':email'] = $email;
 	}
 
+	$newName = null;
 	foreach (['name', 'nationality', 'bio'] as $col) {
 		if (array_key_exists($col, $body)) {
 			$fields[] = "$col = :$col";
 			$params[":$col"] = $body[$col];
+			if ($col === 'name') $newName = trim((string)$body[$col]);
 		}
 	}
 	if (array_key_exists('birth_year', $body)) {
@@ -145,9 +155,18 @@ if ($method === 'PUT') {
 		$params[':birth_year'] = $body['birth_year'] !== null ? (int)$body['birth_year'] : null;
 	}
 	if (!$fields) respond(['error' => 'no fields to update'], 422);
+	
+	// Update author
 	$sql = 'UPDATE authors SET ' . implode(', ', $fields) . ' WHERE id = :id';
 	$stmt = $pdo->prepare($sql);
 	$stmt->execute($params);
+	
+	// If name changed, update all books using this author
+	if ($newName !== null && $newName !== '' && $newName !== $oldName) {
+		$updateBooks = $pdo->prepare('UPDATE books SET author = :new_name WHERE author = :old_name');
+		$updateBooks->execute([':new_name' => $newName, ':old_name' => $oldName]);
+	}
+	
 	$stmt = $pdo->prepare('SELECT * FROM authors WHERE id = :id');
 	$stmt->execute([':id' => $id]);
 	respond($stmt->fetch());

@@ -88,29 +88,19 @@ if ($method === 'GET') {
 if ($method === 'POST') {
 	$name = trim($body['name'] ?? '');
 	if ($name === '') respond(['error' => 'name required'], 422);
-
-	$dup = $pdo->prepare('SELECT COUNT(*) FROM publishers WHERE name = :name');
-	$dup->execute([':name' => $name]);
-	if ((int)$dup->fetchColumn() > 0) respond(['error' => 'Publisher name already exists.'], 422);
-
 	$country = trim($body['country'] ?? '');
 	$founded_year = $body['founded_year'] !== null ? (int)$body['founded_year'] : null;
 	$website = trim($body['website'] ?? '');
 	$note = $body['note'] ?? null;
 
-	try {
-		$stmt = $pdo->prepare('INSERT INTO publishers (name, country, founded_year, website, note) VALUES (:name, :country, :founded_year, :website, :note)');
-		$stmt->execute([
-			':name' => $name,
-			':country' => $country,
-			':founded_year' => $founded_year ?: null,
-			':website' => $website,
-			':note' => $note,
-		]);
-	} catch (PDOException $e) {
-		if (($e->errorInfo[1] ?? null) === 1062) respond(['error' => 'Publisher name already exists.'], 422);
-		throw $e;
-	}
+	$stmt = $pdo->prepare('INSERT INTO publishers (name, country, founded_year, website, note) VALUES (:name, :country, :founded_year, :website, :note)');
+	$stmt->execute([
+		':name' => $name,
+		':country' => $country,
+		':founded_year' => $founded_year ?: null,
+		':website' => $website,
+		':note' => $note,
+	]);
 	$id = (int)$pdo->lastInsertId();
 	$stmt = $pdo->prepare('SELECT * FROM publishers WHERE id = :id');
 	$stmt->execute([':id' => $id]);
@@ -120,23 +110,23 @@ if ($method === 'POST') {
 if ($method === 'PUT') {
 	if (!isset($body['id'])) respond(['error' => 'id required'], 422);
 	$id = (int)$body['id'];
+	
+	// Get old name before update
+	$oldStmt = $pdo->prepare('SELECT name FROM publishers WHERE id = :id');
+	$oldStmt->execute([':id' => $id]);
+	$oldData = $oldStmt->fetch();
+	if (!$oldData) respond(['error' => 'Publisher not found'], 404);
+	$oldName = $oldData['name'];
+	
 	$fields = [];
 	$params = [':id' => $id];
-
-	if (array_key_exists('name', $body)) {
-		$name = trim((string)$body['name']);
-		if ($name === '') respond(['error' => 'name required'], 422);
-		$dup = $pdo->prepare('SELECT COUNT(*) FROM publishers WHERE name = :name AND id <> :id');
-		$dup->execute([':name' => $name, ':id' => $id]);
-		if ((int)$dup->fetchColumn() > 0) respond(['error' => 'Publisher name already exists.'], 422);
-		$fields[] = 'name = :name';
-		$params[':name'] = $name;
-	}
-
-	foreach (['country', 'website', 'note'] as $col) {
+	$newName = null;
+	
+	foreach (['name', 'country', 'website', 'note'] as $col) {
 		if (array_key_exists($col, $body)) {
 			$fields[] = "$col = :$col";
 			$params[":$col"] = $body[$col];
+			if ($col === 'name') $newName = trim((string)$body[$col]);
 		}
 	}
 	if (array_key_exists('founded_year', $body)) {
@@ -144,9 +134,18 @@ if ($method === 'PUT') {
 		$params[':founded_year'] = $body['founded_year'] !== null ? (int)$body['founded_year'] : null;
 	}
 	if (!$fields) respond(['error' => 'no fields to update'], 422);
+	
+	// Update publisher
 	$sql = 'UPDATE publishers SET ' . implode(', ', $fields) . ' WHERE id = :id';
 	$stmt = $pdo->prepare($sql);
 	$stmt->execute($params);
+	
+	// If name changed, update all books using this publisher
+	if ($newName !== null && $newName !== '' && $newName !== $oldName) {
+		$updateBooks = $pdo->prepare('UPDATE books SET publisher = :new_name WHERE publisher = :old_name');
+		$updateBooks->execute([':new_name' => $newName, ':old_name' => $oldName]);
+	}
+	
 	$stmt = $pdo->prepare('SELECT * FROM publishers WHERE id = :id');
 	$stmt->execute([':id' => $id]);
 	respond($stmt->fetch());

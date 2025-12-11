@@ -30,6 +30,3 @@ WHERE `email` IS NULL OR `email` = '';
 ALTER TABLE `authors` MODIFY `email` VARCHAR(255) NOT NULL;
 -- 4) Add unique constraint
 ALTER TABLE `authors` ADD UNIQUE INDEX `uniq_authors_email` (`email`);
-
--- To enforce unique publisher names:
--- ALTER TABLE `publishers` ADD UNIQUE INDEX `uniq_publishers_name` (`name`);

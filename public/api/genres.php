@@ -115,18 +115,38 @@ if ($method === 'POST') {
 if ($method === 'PUT') {
 	if (!isset($body['id'])) respond(['error' => 'id required'], 422);
 	$id = (int)$body['id'];
+	
+	// Get old name before update
+	$oldStmt = $pdo->prepare('SELECT name FROM genres WHERE id = :id');
+	$oldStmt->execute([':id' => $id]);
+	$oldData = $oldStmt->fetch();
+	if (!$oldData) respond(['error' => 'Genre not found'], 404);
+	$oldName = $oldData['name'];
+	
 	$fields = [];
 	$params = [':id' => $id];
+	$newName = null;
+	
 	foreach (['name', 'description'] as $col) {
 		if (array_key_exists($col, $body)) {
 			$fields[] = "$col = :$col";
 			$params[":$col"] = $body[$col];
+			if ($col === 'name') $newName = trim((string)$body[$col]);
 		}
 	}
 	if (!$fields) respond(['error' => 'no fields to update'], 422);
+	
+	// Update genre
 	$sql = 'UPDATE genres SET ' . implode(', ', $fields) . ' WHERE id = :id';
 	$stmt = $pdo->prepare($sql);
 	$stmt->execute($params);
+	
+	// If name changed, update all books using this genre
+	if ($newName !== null && $newName !== '' && $newName !== $oldName) {
+		$updateBooks = $pdo->prepare('UPDATE books SET genre = :new_name WHERE genre = :old_name OR genre = :old_id');
+		$updateBooks->execute([':new_name' => $newName, ':old_name' => $oldName, ':old_id' => (string)$id]);
+	}
+	
 	$stmt = $pdo->prepare('SELECT * FROM genres WHERE id = :id');
 	$stmt->execute([':id' => $id]);
 	respond($stmt->fetch());

@@ -8,7 +8,9 @@ const AUTHOR_API = 'api/authors.php';
 	const btnRefresh = document.getElementById('btnAuthorRefresh');
 	const btnAdd = document.getElementById('btnAuthorAdd');
 	const btnDeleteSelected = document.getElementById('btnAuthorDeleteSelected');
+	const btnExportExcel = document.getElementById('btnAuthorExportExcel');
 	const selectAll = document.getElementById('authorSelectAll');
+	const selectedCountEl = document.getElementById('authorSelectedCount');
 
 	const HIDDEN_KEY = 'author_hidden_ids';
 	const getHiddenIds = () => {
@@ -23,46 +25,92 @@ const AUTHOR_API = 'api/authors.php';
 		catch { return []; }
 	};
 
+	// Track all IDs and selected IDs across pages
+	let allAuthorIds = [];
+	let selectedIds = new Set();
+	let allAuthorsData = []; // Store all authors data for export
+
 	const state = { q: '', page: 1, limit: Number(perPageSelect.value) || 10 };
 	let debounceId;
 	let currentAbortController;
 
 	const updateSelectAllState = () => {
 		if (!selectAll) return;
-		selectAll.checked = !!tbody.querySelector('input[type="checkbox"]:checked');
+		if (allAuthorIds.length === 0) {
+			selectAll.checked = false;
+			selectAll.indeterminate = false;
+		} else if (selectedIds.size === allAuthorIds.length) {
+			selectAll.checked = true;
+			selectAll.indeterminate = false;
+		} else if (selectedIds.size > 0) {
+			selectAll.checked = false;
+			selectAll.indeterminate = true;
+		} else {
+			selectAll.checked = false;
+			selectAll.indeterminate = false;
+		}
+		syncCheckboxes();
+		updateSelectedCount();
+	};
+
+	const syncCheckboxes = () => {
+		tbody.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+			cb.checked = selectedIds.has(String(cb.dataset.id));
+		});
+	};
+
+	const updateSelectedCount = () => {
+		if (!selectedCountEl) return;
+		selectedCountEl.textContent = `Selected: ${selectedIds.size} / ${allAuthorIds.length}`;
 	};
 
 	const escapeHtml = (value = '') =>
 		value.toString().replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 
 	async function loadAuthors() {
-		const params = new URLSearchParams({ page: state.page, per_page: state.limit });
-		if (state.q) params.append('q', state.q);
+		// First fetch all to get total IDs
+		const allParams = new URLSearchParams({ page: 1, per_page: 1000 });
+		if (state.q) allParams.append('q', state.q);
 
 		currentAbortController?.abort();
 		const controller = new AbortController();
 		currentAbortController = controller;
 
 		try {
-			const res = await fetch(`${AUTHOR_API}?${params.toString()}`, { signal: controller.signal });
-			if (!res.ok) throw new Error(`HTTP ${res.status}`);
-			const payload = await res.json();
-			const authors = payload.data ?? [];
-			const total = payload.meta?.total ?? authors.length;
+			const allRes = await fetch(`${AUTHOR_API}?${allParams.toString()}`, { signal: controller.signal });
+			if (!allRes.ok) throw new Error(`HTTP ${allRes.status}`);
+			const allPayload = await allRes.json();
+			const allAuthors = allPayload.data ?? [];
+			
+			// Store all author IDs and data
+			allAuthorIds = allAuthors.map((a) => String(a.id));
+			allAuthorsData = allAuthors; // Store for export
+			
+			// Clean up selectedIds
+			selectedIds = new Set([...selectedIds].filter((id) => allAuthorIds.includes(id)));
 
-			if (total > 0 && authors.length === 0 && state.page > 1) {
-				state.page = Math.max(1, Math.ceil(total / state.limit));
-				return loadAuthors();
+			const total = allPayload.meta?.total ?? allAuthors.length;
+			const totalPages = Math.max(1, Math.ceil(total / state.limit));
+			
+			if (total > 0 && state.page > totalPages) {
+				state.page = totalPages;
 			}
 
-			renderRows(authors);
+			// Get current page items
+			const start = (state.page - 1) * state.limit;
+			const pageItems = allAuthors.slice(start, start + state.limit);
+
+			renderRows(pageItems);
 			renderPagination(total);
-			selectAll.checked = false;
+			updateSelectAllState();
 		} catch (error) {
 			if (error.name === 'AbortError') return;
-			tbody.innerHTML = `<tr><td colspan="6">Không thể tải dữ liệu: ${escapeHtml(error.message)}</td></tr>`;
+			tbody.innerHTML = `<tr><td colspan="7">Không thể tải dữ liệu: ${escapeHtml(error.message)}</td></tr>`;
 			pagination.innerHTML = '';
-			selectAll.checked = false;
+			allAuthorIds = [];
+			allAuthorsData = [];
+			selectedIds.clear();
+			updateSelectAllState();
 		} finally {
 			if (currentAbortController === controller) currentAbortController = null;
 		}
@@ -75,7 +123,7 @@ const AUTHOR_API = 'api/authors.php';
 		}
 		tbody.innerHTML = authors.map((author) => `
 			<tr data-id="${author.id ?? ''}">
-				<td><input type="checkbox" data-id="${author.id ?? ''}"></td>
+				<td><input type="checkbox" data-id="${author.id ?? ''}" ${selectedIds.has(String(author.id)) ? 'checked' : ''}></td>
 				<td>${escapeHtml(author.name ?? '')}</td>
 				<td>${escapeHtml(author.email ?? '')}</td>
 				<td>${escapeHtml(author.nationality ?? '')}</td>
@@ -98,49 +146,20 @@ const AUTHOR_API = 'api/authors.php';
 	function renderPagination(total) {
 		const totalPages = Math.max(1, Math.ceil(total / state.limit));
 		pagination.innerHTML = '';
-
-		const addBtn = (label, page, disabled = false, active = false) => {
+		for (let page = 1; page <= totalPages; page += 1) {
 			const btn = document.createElement('button');
-			btn.textContent = label;
-			if (active) btn.classList.add('active');
-			btn.disabled = disabled;
+			btn.textContent = page;
+			if (page === state.page) {
+				btn.disabled = true;
+				btn.classList.add('active');
+			}
 			btn.addEventListener('click', () => {
-				if (disabled || page === state.page || page < 1 || page > totalPages) return;
+				if (page === state.page) return;
 				state.page = page;
 				loadAuthors();
 			});
 			pagination.appendChild(btn);
-		};
-
-		addBtn('Prev', state.page - 1, state.page <= 1);
-
-		const windowSize = 2;
-		const start = Math.max(1, state.page - windowSize);
-		const end = Math.min(totalPages, state.page + windowSize);
-
-		if (start > 1) {
-			addBtn('1', 1, false, state.page === 1);
-			if (start > 2) {
-				const ellipsis = document.createElement('span');
-				ellipsis.textContent = '...';
-				pagination.appendChild(ellipsis);
-			}
 		}
-
-		for (let page = start; page <= end; page += 1) {
-			addBtn(String(page), page, false, page === state.page);
-		}
-
-		if (end < totalPages) {
-			if (end < totalPages - 1) {
-				const ellipsis = document.createElement('span');
-				ellipsis.textContent = '...';
-				pagination.appendChild(ellipsis);
-			}
-			addBtn(String(totalPages), totalPages, false, state.page === totalPages);
-		}
-
-		addBtn('Next', state.page + 1, state.page >= totalPages);
 	}
 
 	perPageSelect.addEventListener('change', () => {
@@ -156,26 +175,41 @@ const AUTHOR_API = 'api/authors.php';
 			if (state.q === nextQuery) return;
 			state.q = nextQuery;
 			state.page = 1;
+			selectedIds.clear();
 			loadAuthors();
 		}, 300);
 	});
 
-	btnRefresh.addEventListener('click', () => loadAuthors());
+	btnRefresh.addEventListener('click', () => {
+		selectedIds.clear();
+		loadAuthors();
+	});
 
+	// Select All now toggles ALL records across all pages
 	selectAll.addEventListener('change', (event) => {
-		tbody.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
-			checkbox.checked = event.target.checked;
-		});
+		if (event.target.checked) {
+			selectedIds = new Set(allAuthorIds);
+		} else {
+			selectedIds.clear();
+		}
+		syncCheckboxes();
+		updateSelectAllState();
 	});
 
 	tbody.addEventListener('change', (event) => {
-		if (event.target.matches('input[type="checkbox"]')) updateSelectAllState();
+		if (event.target.matches('input[type="checkbox"]')) {
+			const id = String(event.target.dataset.id);
+			if (event.target.checked) {
+				selectedIds.add(id);
+			} else {
+				selectedIds.delete(id);
+			}
+			updateSelectAllState();
+		}
 	});
 
 	btnDeleteSelected.addEventListener('click', () => {
-		const ids = Array.from(tbody.querySelectorAll('input[type="checkbox"]:checked'))
-			.map((checkbox) => checkbox.dataset.id)
-			.filter(Boolean);
+		const ids = Array.from(selectedIds);
 		if (!ids.length) {
 			alert('Please select at least one author.');
 			return;
@@ -195,6 +229,7 @@ const AUTHOR_API = 'api/authors.php';
 			})
 			.then(({ ok, data, raw }) => {
 				if (!ok || data?.error) throw new Error(data?.error || raw || 'Unable to delete.');
+				selectedIds.clear();
 				loadAuthors();
 			})
 			.catch((error) => alert(error.message || 'Delete failed.'));
@@ -220,6 +255,7 @@ const AUTHOR_API = 'api/authors.php';
 				})
 				.then(({ ok, data, raw }) => {
 					if (!ok || data?.error) throw new Error(data?.error || raw || 'Unable to delete author.');
+					selectedIds.delete(String(deleteBtn.dataset.id));
 					loadAuthors();
 				})
 				.catch((error) => alert(error.message || 'Delete failed.'));
@@ -238,6 +274,29 @@ const AUTHOR_API = 'api/authors.php';
 		const row = event.target.closest('tr[data-id]');
 		if (!row?.dataset.id) return;
 		window.location.href = `update-author.html?id=${row.dataset.id}`;
+	});
+
+	// Export Excel functionality
+	btnExportExcel?.addEventListener('click', () => {
+		if (!selectedIds.size) {
+			alert('Please select at least one author to export.');
+			return;
+		}
+
+		const form = document.createElement('form');
+		form.method = 'POST';
+		form.action = 'api/authors/export.php';
+		form.style.display = 'none';
+
+		const input = document.createElement('input');
+		input.type = 'hidden';
+		input.name = 'ids';
+		input.value = JSON.stringify(Array.from(selectedIds));
+		form.appendChild(input);
+
+		document.body.appendChild(form);
+		form.submit();
+		document.body.removeChild(form);
 	});
 
 	loadAuthors();

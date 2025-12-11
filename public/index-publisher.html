@@ -25,9 +25,10 @@
               <option value="5">5</option><option value="10" selected>10</option><option value="25">25</option>
             </select>
           </div>
-          <div class="col d-flex flex-wrap gap-2">
+          <div class="col d-flex flex-wrap gap-2 benphai">
             <button id="btnPublisherRefresh" class="btn btn-outline-primary">Refresh</button>
             <button id="btnPublisherAdd" class="btn btn-primary">Create</button>
+            <button id="btnPublisherExportExcel" class="btn btn-success">Export Excel</button>
             <button id="btnPublisherDeleteSelected" class="btn btn-danger">Delete Selected</button>
           </div>
         </div>
@@ -48,7 +49,10 @@
           </table>
         </div>
 
-        <div class="pagination btn-group flex-wrap" id="publisherPagination"></div>
+        <div class="d-flex align-items-center justify-content-between">
+          <div id="publisherSelectedCount" class="text-muted small">Selected: 0</div>
+          <div class="pagination btn-group flex-wrap" id="publisherPagination"></div>
+        </div>
       </div>
     </main>
   </div>

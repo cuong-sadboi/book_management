@@ -9,6 +9,7 @@ const API = 'api/db.php';
   const btnRefresh = document.getElementById('btnRefresh');
   const btnAdd = document.getElementById('btnAdd');
   const btnDeleteSelected = document.getElementById('btnDeleteSelected');
+  const btnExportExcel = document.getElementById('btnExportExcel');
   const selectAll = document.getElementById('selectAll');
   const selectedCountEl = document.getElementById('selectedCount');
 
@@ -24,17 +25,39 @@ const API = 'api/db.php';
     localStorage.setItem(HIDDEN_KEY, JSON.stringify(Array.from(set)));
   };
 
+  // Track all visible IDs and selected IDs across pages
+  let allVisibleIds = [];
+  let selectedIds = new Set();
+  let allBooksData = []; // Store all books data for export
+
   const updateSelectAllState = () => {
     if (!selectAll) return;
-    const anyChecked = !!tbody.querySelector('input[type="checkbox"]:checked');
-    selectAll.checked = anyChecked && Array.from(tbody.querySelectorAll('input[type="checkbox"]')).every((c) => c.checked);
+    if (allVisibleIds.length === 0) {
+      selectAll.checked = false;
+      selectAll.indeterminate = false;
+    } else if (selectedIds.size === allVisibleIds.length) {
+      selectAll.checked = true;
+      selectAll.indeterminate = false;
+    } else if (selectedIds.size > 0) {
+      selectAll.checked = false;
+      selectAll.indeterminate = true;
+    } else {
+      selectAll.checked = false;
+      selectAll.indeterminate = false;
+    }
     updateSelectedCount();
+    syncCheckboxes();
+  };
+
+  const syncCheckboxes = () => {
+    tbody.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+      cb.checked = selectedIds.has(String(cb.dataset.id));
+    });
   };
 
   const updateSelectedCount = () => {
     if (!selectedCountEl) return;
-    const count = tbody.querySelectorAll('input[type="checkbox"]:checked').length;
-    selectedCountEl.textContent = `Selected: ${count}`;
+    selectedCountEl.textContent = `Selected: ${selectedIds.size} / ${allVisibleIds.length}`;
   };
 
   const state = { q: '', page: 1, limit: Number(perPageSelect.value) || 10 };
@@ -59,8 +82,15 @@ const API = 'api/db.php';
       const payload = await response.json();
       const all = payload.data ?? payload.records ?? [];
       const visible = all.filter((b) => !hidden.has(String(b.id ?? '')));
-      const totalVisible = visible.length;
+      
+      // Store all visible IDs and books data
+      allVisibleIds = visible.map((b) => String(b.id));
+      allBooksData = visible; // Store for export
+      
+      // Clean up selectedIds - remove any that are no longer visible
+      selectedIds = new Set([...selectedIds].filter((id) => allVisibleIds.includes(id)));
 
+      const totalVisible = visible.length;
       const totalPages = Math.max(1, Math.ceil(totalVisible / state.limit));
       if (state.page > totalPages) {
         state.page = totalPages;
@@ -70,14 +100,15 @@ const API = 'api/db.php';
 
       renderRows(pageItems);
       renderPagination(totalVisible);
-      selectAll.checked = false;
-      updateSelectedCount();
+      updateSelectAllState();
     } catch (error) {
       if (error.name === 'AbortError') return;
       tbody.innerHTML = `<tr><td colspan="13">Không thể tải dữ liệu: ${escapeHtml(error.message)}</td></tr>`;
       pagination.innerHTML = '';
-      selectAll.checked = false;
-      updateSelectedCount();
+      allVisibleIds = [];
+      allBooksData = [];
+      selectedIds.clear();
+      updateSelectAllState();
     } finally {
       if (currentAbortController === controller) currentAbortController = null;
     }
@@ -90,7 +121,7 @@ const API = 'api/db.php';
     }
     tbody.innerHTML = books.map((book) => `
       <tr data-id="${book.id ?? ''}">
-        <td><input type="checkbox" data-id="${book.id ?? ''}"></td>
+        <td><input type="checkbox" data-id="${book.id ?? ''}" ${selectedIds.has(String(book.id)) ? 'checked' : ''}></td>
         <td>${escapeHtml(book.isbn ?? '')}</td>
         <td>${escapeHtml(book.title ?? '')}</td>
         <td>${escapeHtml(book.author ?? '')}</td>
@@ -148,6 +179,7 @@ const API = 'api/db.php';
       if (state.q === nextQuery) return;
       state.q = nextQuery;
       state.page = 1;
+      selectedIds.clear(); // Clear selection on new search
       loadBooks();
     }, 300);
   });
@@ -156,39 +188,84 @@ const API = 'api/db.php';
     searchInput.value = '';
     state.q = '';
     state.page = 1;
+    selectedIds.clear(); // Clear selection on refresh
     loadBooks();
   });
 
+  // Select All now toggles ALL records across all pages
   selectAll.addEventListener('change', (event) => {
-    tbody.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
-      checkbox.checked = event.target.checked;
-    });
+    if (event.target.checked) {
+      // Select all visible IDs
+      selectedIds = new Set(allVisibleIds);
+    } else {
+      // Deselect all
+      selectedIds.clear();
+    }
+    syncCheckboxes();
     updateSelectedCount();
   });
 
+  // Handle individual checkbox changes
   tbody.addEventListener('change', (event) => {
-    if (event.target.matches('input[type="checkbox"]')) updateSelectAllState();
+    if (event.target.matches('input[type="checkbox"]')) {
+      const id = String(event.target.dataset.id);
+      if (event.target.checked) {
+        selectedIds.add(id);
+      } else {
+        selectedIds.delete(id);
+      }
+      updateSelectAllState();
+    }
   });
 
   btnDeleteSelected.addEventListener('click', () => {
-    const ids = Array.from(tbody.querySelectorAll('input[type="checkbox"]:checked'))
-      .map((checkbox) => checkbox.dataset.id)
-      .filter(Boolean);
-    if (!ids.length) {
+    if (!selectedIds.size) {
       alert('Please select at least one book.');
       return;
     }
-    if (!confirm(`Hide ${ids.length} selected book(s) from the list?`)) return;
+    if (!confirm(`Hide ${selectedIds.size} selected book(s) from the list?`)) return;
 
     const hidden = getHiddenIds();
-    ids.forEach((id) => hidden.add(String(id)));
+    selectedIds.forEach((id) => hidden.add(String(id)));
     setHiddenIds(hidden);
+    selectedIds.clear();
     loadBooks();
-    updateSelectedCount();
   });
 
   btnAdd.addEventListener('click', () => {
     window.location.href = 'create.html';
+  });
+
+  // Export Excel functionality
+  btnExportExcel?.addEventListener('click', () => {
+    if (!selectedIds.size) {
+      alert('Please select at least one book to export.');
+      return;
+    }
+
+    // Get selected books data
+    const selectedBooks = allBooksData.filter((book) => selectedIds.has(String(book.id)));
+    
+    if (!selectedBooks.length) {
+      alert('No books found to export.');
+      return;
+    }
+
+    // Create form and submit to export endpoint
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = 'api/books/export.php';
+    form.style.display = 'none';
+
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'ids';
+    input.value = JSON.stringify(Array.from(selectedIds));
+    form.appendChild(input);
+
+    document.body.appendChild(form);
+    form.submit();
+    document.body.removeChild(form);
   });
 
   tbody.addEventListener('click', (event) => {
@@ -199,8 +276,8 @@ const API = 'api/db.php';
         const hidden = getHiddenIds();
         hidden.add(String(deleteBtn.dataset.id));
         setHiddenIds(hidden);
+        selectedIds.delete(String(deleteBtn.dataset.id));
         loadBooks();
-        updateSelectedCount();
       }
       return;
     }
@@ -219,5 +296,4 @@ const API = 'api/db.php';
   });
 
   loadBooks();
-  updateSelectedCount();
 })();

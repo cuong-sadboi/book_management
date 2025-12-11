@@ -7,7 +7,9 @@
   const btnRefresh = document.getElementById('btnPublisherRefresh');
   const btnAdd = document.getElementById('btnPublisherAdd');
   const btnDeleteSelected = document.getElementById('btnPublisherDeleteSelected');
+  const btnExportExcel = document.getElementById('btnPublisherExportExcel');
   const selectAll = document.getElementById('publisherSelectAll');
+  const selectedCountEl = document.getElementById('publisherSelectedCount');
 
   const BOOK_HIDDEN_KEY = 'book_hidden_ids';
   const getHiddenBookIds = () => {
@@ -15,41 +17,92 @@
     catch { return []; }
   };
 
+  // Track all IDs and selected IDs across pages
+  let allPublisherIds = [];
+  let selectedIds = new Set();
+  let allPublishersData = []; // Store all publishers data for export
+
   const state = { q: '', page: 1, limit: Number(perPageSelect?.value) || 10 };
   let debounceId;
   let currentAbortController;
 
   const updateSelectAllState = () => {
     if (!selectAll) return;
-    selectAll.checked = !!tbody.querySelector('input[type="checkbox"]:checked');
+    if (allPublisherIds.length === 0) {
+      selectAll.checked = false;
+      selectAll.indeterminate = false;
+    } else if (selectedIds.size === allPublisherIds.length) {
+      selectAll.checked = true;
+      selectAll.indeterminate = false;
+    } else if (selectedIds.size > 0) {
+      selectAll.checked = false;
+      selectAll.indeterminate = true;
+    } else {
+      selectAll.checked = false;
+      selectAll.indeterminate = false;
+    }
+    syncCheckboxes();
+    updateSelectedCount();
+  };
+
+  const syncCheckboxes = () => {
+    tbody.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+      cb.checked = selectedIds.has(String(cb.dataset.id));
+    });
+  };
+
+  const updateSelectedCount = () => {
+    if (!selectedCountEl) return;
+    selectedCountEl.textContent = `Selected: ${selectedIds.size} / ${allPublisherIds.length}`;
   };
 
   const escapeHtml = (value = '') =>
     value.toString().replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 
   async function loadPublishers() {
-    const params = new URLSearchParams({ page: state.page, per_page: state.limit });
-    if (state.q) params.append('q', state.q);
+    // Fetch all to get total IDs
+    const allParams = new URLSearchParams({ page: 1, per_page: 1000 });
+    if (state.q) allParams.append('q', state.q);
 
     currentAbortController?.abort();
     const controller = new AbortController();
     currentAbortController = controller;
 
     try {
-      const res = await fetch(`${API}?${params.toString()}`, { signal: controller.signal });
+      const res = await fetch(`${API}?${allParams.toString()}`, { signal: controller.signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const payload = await res.json();
-      const publishers = payload.data ?? [];
-      const total = payload.meta?.total ?? publishers.length;
+      const allPublishers = payload.data ?? [];
+      
+      // Store all publisher IDs and data
+      allPublisherIds = allPublishers.map((p) => String(p.id));
+      allPublishersData = allPublishers; // Store for export
+      
+      // Clean up selectedIds
+      selectedIds = new Set([...selectedIds].filter((id) => allPublisherIds.includes(id)));
 
-      renderRows(publishers);
+      const total = payload.meta?.total ?? allPublishers.length;
+      const totalPages = Math.max(1, Math.ceil(total / state.limit));
+      
+      if (state.page > totalPages) {
+        state.page = totalPages;
+      }
+
+      // Get current page items
+      const start = (state.page - 1) * state.limit;
+      const pageItems = allPublishers.slice(start, start + state.limit);
+
+      renderRows(pageItems);
       renderPagination(total);
-      selectAll && (selectAll.checked = false);
+      updateSelectAllState();
     } catch (error) {
       if (error.name === 'AbortError') return;
       tbody.innerHTML = `<tr><td colspan="6">Không thể tải dữ liệu: ${escapeHtml(error.message)}</td></tr>`;
       pagination.innerHTML = '';
-      selectAll && (selectAll.checked = false);
+      allPublisherIds = [];
+      allPublishersData = [];
+      selectedIds.clear();
+      updateSelectAllState();
     } finally {
       if (currentAbortController === controller) currentAbortController = null;
     }
@@ -62,7 +115,7 @@
     }
     tbody.innerHTML = rows.map((pub) => `
       <tr data-id="${pub.id ?? ''}">
-        <td><input type="checkbox" data-id="${pub.id ?? ''}"></td>
+        <td><input type="checkbox" data-id="${pub.id ?? ''}" ${selectedIds.has(String(pub.id)) ? 'checked' : ''}></td>
         <td>${escapeHtml(pub.name ?? '')}</td>
         <td>${escapeHtml(pub.country ?? '')}</td>
         <td>${pub.founded_year ?? ''}</td>
@@ -113,26 +166,41 @@
       if (state.q === nextQuery) return;
       state.q = nextQuery;
       state.page = 1;
+      selectedIds.clear();
       loadPublishers();
     }, 300);
   });
 
-  btnRefresh?.addEventListener('click', () => loadPublishers());
+  btnRefresh?.addEventListener('click', () => {
+    selectedIds.clear();
+    loadPublishers();
+  });
 
+  // Select All now toggles ALL records across all pages
   selectAll?.addEventListener('change', (event) => {
-    tbody.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
-      checkbox.checked = event.target.checked;
-    });
+    if (event.target.checked) {
+      selectedIds = new Set(allPublisherIds);
+    } else {
+      selectedIds.clear();
+    }
+    syncCheckboxes();
+    updateSelectAllState();
   });
 
   tbody.addEventListener('change', (event) => {
-    if (event.target.matches('input[type="checkbox"]')) updateSelectAllState();
+    if (event.target.matches('input[type="checkbox"]')) {
+      const id = String(event.target.dataset.id);
+      if (event.target.checked) {
+        selectedIds.add(id);
+      } else {
+        selectedIds.delete(id);
+      }
+      updateSelectAllState();
+    }
   });
 
   btnDeleteSelected?.addEventListener('click', () => {
-    const ids = Array.from(tbody.querySelectorAll('input[type="checkbox"]:checked'))
-      .map((checkbox) => checkbox.dataset.id)
-      .filter(Boolean);
+    const ids = Array.from(selectedIds);
     if (!ids.length) {
       alert('Please select at least one publisher.');
       return;
@@ -152,12 +220,36 @@
       })
       .then(({ ok, data, raw }) => {
         if (!ok || data?.error) throw new Error(data?.error || raw || 'Unable to delete.');
+        selectedIds.clear();
         loadPublishers();
       })
       .catch((error) => alert(error.message || 'Delete failed.'));
   });
 
   btnAdd?.addEventListener('click', () => { window.location.href = 'create-publisher.html'; });
+
+  // Export Excel functionality
+  btnExportExcel?.addEventListener('click', () => {
+    if (!selectedIds.size) {
+      alert('Please select at least one publisher to export.');
+      return;
+    }
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = 'api/publishers/export.php';
+    form.style.display = 'none';
+
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'ids';
+    input.value = JSON.stringify(Array.from(selectedIds));
+    form.appendChild(input);
+
+    document.body.appendChild(form);
+    form.submit();
+    document.body.removeChild(form);
+  });
 
   tbody.addEventListener('click', (event) => {
     const deleteBtn = event.target.closest('.btn-delete');
@@ -177,6 +269,7 @@
         })
         .then(({ ok, data, raw }) => {
           if (!ok || data?.error) throw new Error(data?.error || raw || 'Unable to delete publisher.');
+          selectedIds.delete(String(deleteBtn.dataset.id));
           loadPublishers();
         })
         .catch((error) => alert(error.message || 'Delete failed.'));
