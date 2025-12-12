@@ -157,7 +157,7 @@
     loadGenres();
   });
 
-  searchInput?.addEventListener('input', ({ target }) => {
+  searchInput.addEventListener('input', ({ target }) => {
     const nextQuery = target.value.trim();
     clearTimeout(debounceId);
     debounceId = setTimeout(() => {
@@ -169,7 +169,10 @@
     }, 300);
   });
 
-  btnRefresh?.addEventListener('click', () => {
+  btnRefresh.addEventListener('click', () => {
+    searchInput.value = '';
+    state.q = '';
+    state.page = 1;
     selectedIds.clear();
     loadGenres();
   });

@@ -181,6 +181,9 @@ const AUTHOR_API = 'api/authors.php';
 	});
 
 	btnRefresh.addEventListener('click', () => {
+		searchInput.value = '';
+		state.q = '';
+		state.page = 1;
 		selectedIds.clear();
 		loadAuthors();
 	});

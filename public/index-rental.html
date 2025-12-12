@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="vi">
+<head>
+	<meta charset="utf-8">
+	<title>Book Rental Management</title>
+	<meta name="viewport" content="width=device-width,initial-scale=1">
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+	<link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-light d-flex flex-column min-vh-100">
+	<div id="navbarInclude" data-include="../include/navbar.html"></div>
+	<div class="layout-wrapper">
+		<div id="sidebarInclude" data-include="../include/sidebar.html"></div>
+		<div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+		<main class="content-area">
+			<div class="container py-4">
+				<h1 class="mb-4 text-primary" style="font-size: 25px;">Book Rental Management</h1>
+
+				<div class="controls row g-2 align-items-center mb-4">
+					<div class="col-12 col-md-3">
+						<input id="rentalSearch" class="form-control" type="search" placeholder="Search by user, book...">
+					</div>
+					<div class="col-auto">
+						<select id="statusFilter" class="form-select">
+							<option value="">All Status</option>
+							<option value="active">Active</option>
+							<option value="returned">Returned</option>
+							<option value="overdue">Overdue</option>
+						</select>
+					</div>
+					<div class="col-auto">
+						<select id="rentalPerPage" class="form-select">
+							<option value="5">5</option><option value="10" selected>10</option><option value="25">25</option>
+						</select>
+					</div>
+					<div class="col d-flex flex-wrap gap-2 benphai">
+						<button id="btnRentalRefresh" class="btn btn-outline-primary">Refresh</button>
+						<button id="btnRentalAdd" class="btn btn-primary">Create Rental</button>
+						<button id="btnRentalExportExcel" class="btn btn-success">Export Excel</button>
+						<button id="btnRentalDeleteSelected" class="btn btn-danger">Delete Selected</button>
+					</div>
+				</div>
+
+				<div class="table-responsive shadow-sm rounded">
+					<table class="table table-striped table-hover align-middle mb-3">
+						<thead>
+							<tr>
+								<th><input id="rentalSelectAll" type="checkbox"></th>
+								<th>ID</th>
+								<th>User</th>
+								<th>Book</th>
+								<th>Rental Date</th>
+								<th>Due Date</th>
+								<th>Return Date</th>
+								<th>Status</th>
+								<th>Actions</th>
+							</tr>
+						</thead>
+						<tbody id="rentalTbody"></tbody>
+					</table>
+				</div>
+
+				<div class="d-flex align-items-center justify-content-between">
+					<div id="rentalSelectedCount" class="text-muted small">Selected: 0</div>
+					<div class="pagination btn-group flex-wrap" id="rentalPagination"></div>
+				</div>
+			</div>
+		</main>
+	</div>
+	<div id="footerInclude" class="layout-footer" data-include="../include/footer.html"></div>
+
+	<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+	<script src="js/layout.js"></script>
+	<script>
+		document.querySelectorAll('[data-include]').forEach((node) => {
+			fetch(node.dataset.include)
+				.then((res) => (res.ok ? res.text() : Promise.reject(res.statusText)))
+				.then((html) => { node.innerHTML = html; window.initLayout?.(); })
+				.catch(() => { node.innerHTML = '<div class="alert alert-warning m-0">Unable to load layout section.</div>'; });
+		});
+	</script>
+	<script src="js/rental.js"></script>
+
+	<!-- Return button handler -->
+	<script>
+		(() => {
+			const tbody = document.getElementById('rentalTbody');
+			const refreshBtn = document.getElementById('btnRentalRefresh');
+
+			// Format datetime for display (same format used elsewhere)
+			const formatDateTimeDisplay = (isoOrDate) => {
+				const d = isoOrDate ? new Date(isoOrDate) : new Date();
+				return d.toLocaleString('vi-VN', {
+					year: 'numeric',
+					month: '2-digit',
+					day: '2-digit',
+					hour: '2-digit',
+					minute: '2-digit'
+				});
+			};
+
+			// Update row DOM: set return date cell and status badge
+			const updateRowAfterReturn = (row, returnDateStr) => {
+				if (!row) return;
+				const cells = row.querySelectorAll('td');
+				// Return Date column is the 7th column (index 6)
+				if (cells[6]) cells[6].textContent = returnDateStr;
+				// Status column is the 8th column (index 7) — replace content with badge
+				if (cells[7]) {
+					cells[7].innerHTML = '<span class="badge bg-secondary">Returned</span>';
+				}
+				// Optionally disable the Return button in Actions cell
+				const actionCell = cells[8];
+				if (actionCell) {
+					const btn = actionCell.querySelector('.btn-return') || actionCell.querySelector('button[data-action="return"]') || Array.from(actionCell.querySelectorAll('button')).find(b => (b.textContent || '').trim().toLowerCase().startsWith('return'));
+					if (btn) {
+						btn.disabled = true;
+						btn.classList.remove('btn-success');
+						btn.classList.add('btn-secondary');
+						btn.textContent = 'Returned';
+					}
+				}
+			};
+
+			// Send PUT to API to mark rental returned
+			const markRentalAsReturned = async (rentalId, row) => {
+				if (!rentalId) return alert('Rental id not found.');
+				if (!confirm('Confirm return ALL books for rental #' + rentalId + '?')) return;
+				try {
+					const nowSql = new Date().toISOString().slice(0,19).replace('T',' ');
+					const res = await fetch('api/rentals.php', {
+						method: 'PUT',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ id: Number(rentalId), status: 'returned', return_date: nowSql })
+					});
+					const data = await res.json().catch(()=>null);
+					if (!res.ok || data?.error) throw new Error(data?.error || 'Failed to mark rental as returned.');
+					// prefer server return_date if available
+					const serverDate = data?.return_date ?? data?.data?.return_date ?? data?.data?.rental?.return_date ?? nowSql;
+					const displayDate = formatDateTimeDisplay(serverDate || nowSql);
+					updateRowAfterReturn(row, displayDate);
+					alert('Rental marked as returned.');
+				} catch (err) {
+					alert(err.message || 'Error returning rental.');
+				}
+			};
+
+			// Delegate clicks in tbody: detect Return buttons by class, data-action or button text
+			if (tbody) {
+				tbody.addEventListener('click', (ev) => {
+					const btn = ev.target.closest('button');
+					if (!btn) return;
+					const isReturn = btn.classList.contains('btn-return') || btn.dataset?.action === 'return' || (btn.textContent || '').trim().toLowerCase().startsWith('return');
+					if (!isReturn) return;
+					// find rental id (from data-id or row)
+					let rentalId = btn.dataset?.id || btn.getAttribute('data-id') || null;
+					const row = btn.closest('tr');
+					if (!rentalId) {
+						// fallback: try to read ID from second cell
+						const idCell = row?.querySelector('td:nth-child(2)');
+						rentalId = idCell ? idCell.textContent.trim() : null;
+					}
+					markRentalAsReturned(rentalId, row);
+				});
+			}
+
+			// expose for manual use
+			window.markRentalAsReturned = markRentalAsReturned;
+		})();
+	</script>
+</body>
+</html>

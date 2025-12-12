@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<title>Create Rental | Book Management</title>
+	<meta name="viewport" content="width=device-width,initial-scale=1">
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+	<link rel="stylesheet" href="css/style.css">
+	<style>
+		.book-item {
+			border: 1px solid #dee2e6;
+			border-radius: 0.375rem;
+			padding: 1rem;
+			margin-bottom: 1rem;
+			background-color: #f8f9fa;
+			position: relative;
+		}
+		.book-item .btn-remove {
+			position: absolute;
+			top: 0.5rem;
+			right: 0.5rem;
+		}
+		.book-cover-small {
+			width: 80px;
+			height: 110px;
+			object-fit: cover;
+			border-radius: 0.25rem;
+		}
+		#bookSearchModal .book-search-item {
+			cursor: pointer;
+			border: 1px solid #dee2e6;
+			border-radius: 0.375rem;
+			padding: 0.75rem;
+			margin-bottom: 0.5rem;
+			transition: all 0.2s;
+		}
+		#bookSearchModal .book-search-item:hover {
+			background-color: #f8f9fa;
+			border-color: #0d6efd;
+		}
+		#bookSearchModal .book-search-item img {
+			width: 50px;
+			height: 70px;
+			object-fit: cover;
+		}
+	</style>
+</head>
+<body class="bg-light d-flex flex-column min-vh-100">
+	<div id="navbarInclude" data-include="../include/navbar.html"></div>
+	<div class="layout-wrapper">
+		<div id="sidebarInclude" data-include="../include/sidebar.html"></div>
+		<div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+		<main class="content-area">
+			<div class="container">
+				<div class="card shadow-sm border-0">
+					<div class="card-header bg-white border-0 pb-0">
+						<h2 class="h4 mb-0">Create new rental</h2>
+					</div>
+					<div class="card-body">
+						<form id="rentalForm" class="row g-3">
+							<!-- User Information -->
+							<div class="col-12">
+								<label for="user_id" class="form-label required">User </label>
+								<select id="user_id" name="user_id" class="form-select" required>
+									<option value="">-- Select user --</option>
+								</select>
+							</div>
+
+							<!-- Book Information -->
+							<div class="col-12 mt-4">
+								<div class="d-flex justify-content-between align-items-center mb-3">
+									<label class="form-label required mb-0">Books</label>
+									<button type="button" class="btn btn-sm btn-outline-primary" id="addBookBtn">
+										<i class="bi bi-plus-circle"></i> Add Book
+									</button>
+								</div>
+								<div id="booksList">
+									<div class="alert alert-info mb-0">No book selected. Click "Add Book" to select books for this rental.</div>
+								</div>
+							</div>
+
+							<!-- Rental Details -->
+							<div class="col-md-6">
+								<label for="due_date" class="form-label required">Due Date </label>
+								<input type="datetime-local" id="due_date" name="due_date" class="form-control" required>
+							</div>
+							<div class="col-12">
+								<label for="notes" class="form-label">Notes</label>
+								<textarea id="notes" name="notes" rows="3" class="form-control" placeholder="Optional notes..."></textarea>
+							</div>
+							<div class="col-12 d-flex justify-content-end gap-2 pt-3">
+								<a href="index-rental.html" class="btn btn-outline-secondary">Cancel</a>
+								<button type="submit" class="btn btn-primary">Create Rental</button>
+							</div>
+						</form>
+					</div>
+				</div>
+			</div>
+		</main>
+	</div>
+	<div id="footerInclude" class="layout-footer" data-include="../include/footer.html"></div>
+
+	<!-- Book Search Modal -->
+	<div class="modal fade" id="bookSearchModal" tabindex="-1">
+		<div class="modal-dialog modal-lg">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h5 class="modal-title">Select Book</h5>
+					<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+				</div>
+				<div class="modal-body">
+					<div class="mb-3">
+						<input type="text" id="bookSearchInput" class="form-control" placeholder="Search by title, author, or ISBN...">
+					</div>
+					<div id="bookSearchResults" style="max-height: 400px; overflow-y: auto;">
+						<div class="text-center text-muted py-3">
+							<p>Type to search for books...</p>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+	<script src="js/layout.js"></script>
+	<script>
+		(() => {
+			document.querySelectorAll('[data-include]').forEach((node) => {
+				fetch(node.dataset.include)
+					.then((res) => (res.ok ? res.text() : Promise.reject(res.statusText)))
+					.then((html) => { node.innerHTML = html; window.initLayout?.(); })
+					.catch(() => { node.innerHTML = '<div class="alert alert-warning m-0">Unable to load layout section.</div>'; });
+			});
+
+			// Get hidden book IDs from localStorage
+			const BOOK_HIDDEN_KEY = 'book_hidden_ids';
+			const getHiddenBookIds = () => {
+				try {
+					return new Set(JSON.parse(localStorage.getItem(BOOK_HIDDEN_KEY) || '[]').map(String));
+				} catch {
+					return new Set();
+				}
+			};
+
+			const booksList = document.getElementById('booksList');
+			let rentalBooks = [];
+			let allBooks = [];
+			const bookSearchModal = new bootstrap.Modal(document.getElementById('bookSearchModal'));
+
+			// Escape HTML
+			const escapeHtml = (text) => {
+				if (!text) return '';
+				const div = document.createElement('div');
+				div.textContent = text;
+				return div.innerHTML;
+			};
+
+			// Resolve candidate URLs for cover image (absolute)
+			const getCoverCandidates = (cover) => {
+				const placeholder = 'https://via.placeholder.com/80x110?text=No+Cover';
+				const p = window.location.pathname;
+				const idx = p.indexOf('/public/');
+				const baseRoot = idx !== -1 ? p.substring(0, idx) : '';
+				const rootPrefix = window.location.origin + baseRoot;
+				if (!cover) return [placeholder];
+				const s = String(cover).trim();
+				const c = [];
+				if (/^https?:\/\//i.test(s)) {
+					c.push(s);
+				} else if (s.startsWith('/')) {
+					c.push(window.location.origin + s);
+					c.push(window.location.origin + '/' + s.replace(/^\/+/, ''));
+				} else {
+					c.push(rootPrefix + '/uploads/books/' + s);
+					c.push(rootPrefix + '/uploads/' + s);
+					c.push('./uploads/books/' + s);
+					c.push('../uploads/books/' + s);
+					c.push('./uploads/' + s);
+					c.push('../uploads/' + s);
+				}
+				c.push(placeholder);
+				return c;
+			};
+
+			// onerror handler
+			window.imgFallback = window.imgFallback || function(img) {
+				try {
+					const list = (img.dataset.srcs || '').split('||').filter(Boolean);
+					let idx = parseInt(img.dataset.srcIdx || '0', 10);
+					idx++;
+					if (idx < list.length) {
+						img.dataset.srcIdx = idx;
+						img.src = list[idx];
+					} else {
+						img.onerror = null;
+					}
+				} catch (e) {
+					img.onerror = null;
+				}
+			};
+
+			const initImages = (root = document) => {
+				(root.querySelectorAll ? root.querySelectorAll('img[data-srcs]') : []).forEach(img => {
+					const list = (img.dataset.srcs || '').split('||').filter(Boolean);
+					if (!list.length) return;
+					img.dataset.srcIdx = img.dataset.srcIdx || '0';
+					try { img.src = list[0]; } catch(e){}
+					if (!img.onerror) img.onerror = function(){ window.imgFallback(this); };
+					console.debug('img candidates', img, list);
+				});
+			};
+
+			// Render books list
+			const renderBooksList = () => {
+				if (rentalBooks.length === 0) {
+					booksList.innerHTML = '<div class="alert alert-info mb-0">No book selected. Click "Add Book" to select books for this rental.</div>';
+					return;
+				}
+
+				booksList.innerHTML = rentalBooks.map(book => {
+					const coverCandidates = getCoverCandidates(book.cover_image);
+					const dataSrcs = coverCandidates.map(escapeHtml).join('||');
+					const src0 = escapeHtml(coverCandidates[0]);
+					return `
+						<div class="book-item" data-book-id="${book.id}">
+							<button type="button" class="btn btn-sm btn-danger btn-remove" onclick="removeBook(${book.id})">
+								<i class="bi bi-trash"></i> Remove
+							</button>
+							<div class="row align-items-center">
+								<div class="col-auto">
+									<img src="${src0}" data-srcs="${dataSrcs}" data-src-idx="0" onerror="window.imgFallback(this)" alt="${escapeHtml(book.title || '')}" class="book-cover-small">
+								</div>
+								<div class="col">
+									<h6 class="mb-1">${escapeHtml(book.title || 'N/A')}</h6>
+									<div class="small text-muted">
+										<div><strong>ISBN:</strong> ${escapeHtml(book.isbn || 'N/A')}</div>
+										<div><strong>Author:</strong> ${escapeHtml(book.author || 'N/A')}</div>
+										<div><strong>Publisher:</strong> ${escapeHtml(book.publisher || 'N/A')}</div>
+										<div><strong>Stock:</strong> ${book.stock || 0}</div>
+									</div>
+								</div>
+							</div>
+						</div>
+					`;
+				}).join('');
+				initImages(booksList);
+			};
+
+			// Add book to rental
+			window.addBookToRental = (bookId) => {
+				const book = allBooks.find(b => b.id === bookId);
+				if (!book) return;
+				
+				// Check if book already added
+				if (rentalBooks.some(b => b.id === bookId)) {
+					alert('This book is already selected for the rental.');
+					return;
+				}
+
+				// Check if book is available for rental
+				if (Number(book.is_rental) !== 1) {
+					alert('This book is not available for rental.');
+					return;
+				}
+
+				if (Number(book.stock) <= 0) {
+					alert('This book is out of stock.');
+					return;
+				}
+
+				rentalBooks.push(book);
+				renderBooksList();
+				bookSearchModal.hide();
+			};
+
+			// Remove book from list
+			window.removeBook = (bookId) => {
+				if (confirm('Are you sure you want to remove this book from the rental?')) {
+					rentalBooks = rentalBooks.filter(b => b.id !== bookId);
+					renderBooksList();
+				}
+			};
+
+			// Get available rental books (filtered)
+			const getAvailableRentalBooks = () => {
+				const hiddenIds = getHiddenBookIds();
+				return allBooks.filter(book => {
+					const isRental = Number(book.is_rental) === 1;
+					const hasStock = Number(book.stock) > 0;
+					const notHidden = !hiddenIds.has(String(book.id));
+					return isRental && hasStock && notHidden;
+				});
+			};
+
+			// Render books in search modal
+			const renderBookSearchResults = (books) => {
+				if (books.length === 0) {
+					bookSearchResults.innerHTML = '<div class="text-center text-muted py-3"><p>No books found.</p></div>';
+					return;
+				}
+
+				bookSearchResults.innerHTML = books.map(book => {
+					const coverCandidates = getCoverCandidates(book.cover_image);
+					const dataSrcs = coverCandidates.map(escapeHtml).join('||');
+					const src0 = escapeHtml(coverCandidates[0]);
+					return `
+						<div class="book-search-item d-flex align-items-center" onclick="addBookToRental(${book.id})">
+							<img src="${src0}" data-srcs="${dataSrcs}" data-src-idx="0" onerror="window.imgFallback(this)" alt="${escapeHtml(book.title || '')}" class="me-3">
+							<div class="flex-grow-1">
+								<h6 class="mb-1">${escapeHtml(book.title || 'Unknown')}</h6>
+								<div class="small text-muted">
+									${escapeHtml(book.author || 'Unknown Author')} • ${escapeHtml(book.isbn || 'No ISBN')} • Stock: ${book.stock || 0}
+								</div>
+							</div>
+						</div>
+					`;
+				}).join('');
+				initImages(bookSearchResults);
+			};
+
+			// Book search functionality
+			const bookSearchInput = document.getElementById('bookSearchInput');
+			const bookSearchResults = document.getElementById('bookSearchResults');
+			const hiddenIds = getHiddenBookIds();
+
+			bookSearchInput.addEventListener('input', (e) => {
+				const query = e.target.value.toLowerCase().trim();
+				const availableBooks = getAvailableRentalBooks();
+				
+				let filtered;
+				if (query.length === 0) {
+					// Show all available books when query is empty
+					filtered = availableBooks;
+				} else {
+					filtered = availableBooks.filter(book => {
+						return (book.title?.toLowerCase().includes(query) ||
+								book.author?.toLowerCase().includes(query) ||
+								book.isbn?.toLowerCase().includes(query));
+					});
+				}
+
+				renderBookSearchResults(filtered);
+			});
+
+			// Show add book modal
+			document.getElementById('addBookBtn').addEventListener('click', () => {
+				bookSearchInput.value = '';
+				// Show all available books when modal opens
+				if (allBooks.length > 0) {
+					const availableBooks = getAvailableRentalBooks();
+					renderBookSearchResults(availableBooks);
+				} else {
+					bookSearchResults.innerHTML = '<div class="text-center text-muted py-3"><p>Loading books...</p></div>';
+					// Try to load books if not loaded yet
+					fetch('api/db.php?limit=1000')
+						.then(res => res.json())
+						.then(data => {
+							if (data.success && data.data) {
+								allBooks = data.data;
+								const availableBooks = getAvailableRentalBooks();
+								renderBookSearchResults(availableBooks);
+							} else {
+								bookSearchResults.innerHTML = '<div class="text-center text-muted py-3"><p>No books available.</p></div>';
+							}
+						})
+						.catch(() => {
+							bookSearchResults.innerHTML = '<div class="text-center text-muted py-3"><p>Error loading books.</p></div>';
+						});
+				}
+				bookSearchModal.show();
+			});
+
+			// Load users
+			fetch('api/users.php?per_page=1000')
+				.then(res => res.json())
+				.then(data => {
+					const select = document.getElementById('user_id');
+					(data.data || []).forEach(u => {
+						const opt = document.createElement('option');
+						opt.value = u.id;
+						opt.textContent = `${u.name} (${u.email})`;
+						select.appendChild(opt);
+					});
+				})
+				.catch(err => {
+					console.error('Error loading users:', err);
+				});
+
+			// Load all books for search
+			fetch('api/db.php?limit=1000')
+				.then(res => res.json())
+				.then(data => {
+					if (data.success && data.data) {
+						allBooks = data.data;
+					}
+				})
+				.catch(err => {
+					console.error('Error loading books:', err);
+				});
+
+			// Set default due date (14 days from now)
+			const dueDate = new Date();
+			dueDate.setDate(dueDate.getDate() + 14);
+			document.getElementById('due_date').value = dueDate.toISOString().slice(0, 16);
+
+			// Form submit
+			document.getElementById('rentalForm').addEventListener('submit', async (e) => {
+				e.preventDefault();
+				const form = e.target;
+				const btn = form.querySelector('button[type="submit"]');
+				const original = btn.textContent;
+				btn.disabled = true; 
+				btn.textContent = 'Creating...';
+				
+				// Validate
+				if (!form.user_id.value) {
+					alert('Please select a user.');
+					btn.disabled = false;
+					btn.textContent = original;
+					return;
+				}
+
+				if (rentalBooks.length === 0) {
+					alert('Please select at least one book for the rental.');
+					btn.disabled = false;
+					btn.textContent = original;
+					return;
+				}
+
+				try {
+					const userId = parseInt(form.user_id.value);
+					const dueDate = form.due_date.value ? form.due_date.value.replace('T', ' ') + ':00' : null;
+					const notes = form.notes.value.trim();
+
+					// Build items array for single POST
+					const items = rentalBooks.map(b => ({
+						book_id: b.id,
+						quantity: b.quantity ?? 1,
+						start_date: null,
+						end_date: dueDate
+					}));
+
+					const payload = {
+						user_id: userId,
+						items: items,
+						due_date: dueDate,
+						notes: notes
+					};
+
+					const res = await fetch('api/rentals.php', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify(payload)
+					});
+
+					const data = await res.json();
+					if (!res.ok || data?.error) {
+						const msg = data?.error || 'Unknown error';
+						alert(`Failed to create rental: ${msg}`);
+					} else {
+						alert('Rental created successfully.');
+						window.location.href = 'index-rental.html?created=1';
+					}
+				} catch (err) {
+					alert(err.message || 'An error occurred while creating rentals.');
+				} finally {
+					btn.disabled = false; 
+					btn.textContent = original;
+				}
+			});
+		})();
+	</script>
+</body>
+</html>

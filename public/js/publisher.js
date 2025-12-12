@@ -172,6 +172,9 @@
   });
 
   btnRefresh?.addEventListener('click', () => {
+    searchInput.value = '';
+    state.q = '';
+    state.page = 1;
     selectedIds.clear();
     loadPublishers();
   });

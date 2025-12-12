@@ -181,7 +181,12 @@
         }, 300);
       });
 
-      btnRefresh.addEventListener('click', () => loadAuthors());
+      btnRefresh.addEventListener('click', () => {
+        searchInput.value = '';
+        state.q = '';
+        state.page = 1;
+        loadAuthors();
+      });
 
       selectAll.addEventListener('change', (event) => {
         tbody.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {

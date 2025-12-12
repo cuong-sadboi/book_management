@@ -1,4 +1,8 @@
 <?php
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
@@ -59,32 +63,50 @@ if ($method === 'GET') {
 	$page = max(1, (int)($_GET['page'] ?? 1));
 	$per = min(100, max(1, (int)($_GET['per_page'] ?? 10)));
 	$q = trim($_GET['q'] ?? '');
-	$where = [];
-	$params = [];
-	if ($q !== '') {
-		$where[] = '(name LIKE :q OR nationality LIKE :q)';
-		$params[':q'] = "%$q%";
-	}
-	$whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
-	$count = $pdo->prepare("SELECT COUNT(*) FROM authors $whereSql");
-	$count->execute($params);
-	$total = (int)$count->fetchColumn();
-
 	$offset = ($page - 1) * $per;
-	$stmt = $pdo->prepare("SELECT * FROM authors $whereSql ORDER BY id DESC LIMIT :limit OFFSET :offset");
-	foreach ($params as $k => $v) $stmt->bindValue($k, $v, PDO::PARAM_STR);
-	$stmt->bindValue(':limit', $per, PDO::PARAM_INT);
-	$stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
-	$stmt->execute();
-	respond([
-		'data' => $stmt->fetchAll(),
-		'meta' => [
-			'total' => $total,
-			'per_page' => $per,
-			'current_page' => $page,
-			'last_page' => (int)ceil($total / $per),
-		],
-	]);
+
+	$whereClause = '';
+	$params = [];
+	$searchColumns = ['name', 'nationality'];
+	if ($q !== '') {
+		$likeTerm = "%{$q}%";
+		$conditions = [];
+		foreach ($searchColumns as $column) {
+			$paramName = ":term_{$column}";
+			$conditions[] = "{$column} LIKE {$paramName}";
+			$params[$paramName] = $likeTerm;
+		}
+		$whereClause = 'WHERE ' . implode(' OR ', $conditions);
+	}
+
+	try {
+		$countStmt = $pdo->prepare("SELECT COUNT(*) FROM authors {$whereClause}");
+		$countStmt->execute($params);
+		$total = (int)$countStmt->fetchColumn();
+
+		$sql = "SELECT * FROM authors {$whereClause} ORDER BY id DESC LIMIT :limit OFFSET :offset";
+		$stmt = $pdo->prepare($sql);
+		foreach ($params as $key => $value) {
+			$stmt->bindValue($key, $value, PDO::PARAM_STR);
+		}
+		$stmt->bindValue(':limit', $per, PDO::PARAM_INT);
+		$stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+		$stmt->execute();
+
+		respond([
+			'data' => $stmt->fetchAll(),
+			'meta' => [
+				'total' => $total,
+				'per_page' => $per,
+				'current_page' => $page,
+				'last_page' => (int)ceil($total / $per),
+			],
+		]);
+	} catch (PDOException $e) {
+		respond(['error' => 'Database error: ' . $e->getMessage()], 500);
+	} catch (Exception $e) {
+		respond(['error' => 'Error: ' . $e->getMessage()], 500);
+	}
 }
 
 // CREATE
