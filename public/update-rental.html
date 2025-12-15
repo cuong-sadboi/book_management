@@ -214,6 +214,8 @@
 			const bookSearchModal = new bootstrap.Modal(document.getElementById('bookSearchModal'));
 			const userSearchModal = new bootstrap.Modal(document.getElementById('userSearchModal'));
 
+			const MAX_BOOKS = 5; // Maximum number of books allowed
+
 			if (!id) {
 				form.innerHTML = '<div class="alert alert-warning mb-0">Missing rental id.</div>';
 				return;
@@ -230,33 +232,92 @@
 			// Resolve cover image URL with sensible fallbacks (returns absolute URLs)
 			const getCoverCandidates = (cover) => {
 				const placeholder = 'https://via.placeholder.com/80x110?text=No+Cover';
-				// compute project base (remove '/public/...' from path)
 				const p = window.location.pathname;
 				const idx = p.indexOf('/public/');
 				const baseRoot = idx !== -1 ? p.substring(0, idx) : '';
-				const rootPrefix = window.location.origin + baseRoot; // e.g. https://localhost/book_management
+				const rootPrefix = window.location.origin + baseRoot;
 
 				if (!cover) return [placeholder];
 				const s = String(cover).trim();
 				const c = [];
 				if (/^https?:\/\//i.test(s)) {
 					c.push(s);
-				} else if (s.startsWith('/')) {
-					// absolute from domain root
-					c.push(window.location.origin + s);
-					c.push(window.location.origin + '/' + s.replace(/^\/+/, ''));
+				} else if (s.startsWith('//')) {
+					c.push(window.location.protocol + s);
 				} else {
-					// try uploads under project root and public-relative paths
-					c.push(rootPrefix + '/uploads/books/' + s);
-					c.push(rootPrefix + '/uploads/' + s);
-					// also try public-relative (current location) fallbacks
-					c.push('./uploads/books/' + s);
-					c.push('../uploads/books/' + s);
-					c.push('./uploads/' + s);
-					c.push('../uploads/' + s);
+					const raw = s.replace(/^\/+/, '');
+					const patterns = [
+						`${rootPrefix}/public/${raw}`,
+						`${rootPrefix}/${raw}`,
+						`${window.location.origin}/public/${raw}`,
+						`${window.location.origin}/${raw}`,
+						`${rootPrefix}/public/uploads/books/${raw}`,
+						`${rootPrefix}/public/uploads/${raw}`,
+						`${rootPrefix}/uploads/books/${raw}`,
+						`${rootPrefix}/uploads/${raw}`,
+						`${window.location.origin}/uploads/books/${raw}`,
+						`${window.location.origin}/uploads/${raw}`,
+						`./${raw}`,
+						`../${raw}`
+					];
+					patterns.forEach(u => {
+						try {
+							c.push(encodeURI(u.replace(/([^:]\/)\/+/g, '$1')));
+						} catch (e) {
+							c.push(u.replace(/([^:]\/)\/+/g, '$1'));
+						}
+					});
 				}
 				c.push(placeholder);
-				return c;
+				return Array.from(new Set(c.filter(Boolean)));
+			};
+
+			// Try candidates by loading each into temporary Image
+			const tryCandidatesForImage = (img, list = [], timeoutMs = 2500) => {
+				if (!Array.isArray(list) || !list.length) {
+					img.src = 'https://via.placeholder.com/80x110?text=No+Cover';
+					return;
+				}
+				let idx = 0;
+				const next = () => {
+					if (idx >= list.length) {
+						img.src = 'https://via.placeholder.com/80x110?text=No+Cover';
+						return;
+					}
+					const candidate = list[idx++];
+					console.debug('[tryCandidates]', idx - 1, candidate);
+					if (candidate === 'https://via.placeholder.com/80x110?text=No+Cover') {
+						img.src = candidate;
+						return;
+					}
+					const tester = new Image();
+					let finished = false;
+					const timer = setTimeout(() => {
+						if (!finished) {
+							finished = true;
+							next();
+						}
+					}, timeoutMs);
+					tester.onload = () => {
+						if (!finished) {
+							finished = true;
+							clearTimeout(timer);
+							img.src = candidate;
+							img.dataset.srcIdx = idx - 1;
+							console.debug('[tryCandidates] loaded', candidate);
+						}
+					};
+					tester.onerror = () => {
+						if (!finished) {
+							finished = true;
+							clearTimeout(timer);
+							next();
+						}
+					};
+					tester.src = candidate;
+				};
+				img.src = 'https://via.placeholder.com/80x110?text=No+Cover';
+				next();
 			};
 
 			// onerror handler to try next candidate
@@ -276,34 +337,71 @@
 				}
 			};
 
-			// initialize imgs that have data-srcs after rendering
+			// initialize imgs with data-srcs by testing candidates
 			const initImages = (root = document) => {
 				(root.querySelectorAll ? root.querySelectorAll('img[data-srcs]') : []).forEach(img => {
 					const list = (img.dataset.srcs || '').split('||').filter(Boolean);
 					if (!list.length) return;
-					// set initial index and src to first candidate if not already set
 					img.dataset.srcIdx = img.dataset.srcIdx || '0';
-					try { img.src = list[0]; } catch(e){ /*ignore*/ }
-					// attach onerror if not present
+					tryCandidatesForImage(img, list);
 					if (!img.onerror) img.onerror = function(){ window.imgFallback(this); };
-					// debug
-					console.debug('img candidates', img, list);
+					console.debug('initImages candidates:', img, list);
 				});
 			};
 
-			// Format datetime for input[type="datetime-local"]
+			// Helper: fetch book and set candidates for images with data-book-id
+			const initBookImages = async (root = document) => {
+				const imgs = root.querySelectorAll ? Array.from(root.querySelectorAll('img[data-book-id]:not([data-candidate-built])')) : [];
+				await Promise.all(imgs.map(async (img) => {
+					try {
+						img.setAttribute('data-candidate-built', '1');
+						const bookId = img.dataset.bookId || img.getAttribute('data-book-id');
+						if (!bookId) return;
+						const res = await fetch(`api/books.php?id=${encodeURIComponent(String(bookId))}`);
+						const payload = await res.json().catch(() => null);
+						const book = payload?.data ?? payload ?? null;
+						const coverFromBook = book && (book.cover_image || book.cover || book.image || book.thumbnail);
+						const candidates = coverFromBook ? getCoverCandidates(coverFromBook) : getCoverCandidates(String(bookId));
+						img.dataset.srcs = candidates.map(u => encodeURI(String(u))).join('||');
+						img.dataset.srcIdx = '0';
+						tryCandidatesForImage(img, candidates);
+						if (!img.onerror) img.onerror = function(){ window.imgFallback(this); };
+						console.debug('initBookImages candidates for book', bookId, candidates);
+					} catch (e) {
+						console.debug('initBookImages error', e);
+					}
+				}));
+			};
+
+			// Format datetime for input[type="datetime-local"] - Vietnam timezone
 			const formatDateTimeLocal = (dateStr) => {
 				if (!dateStr) return '';
 				const d = new Date(dateStr);
-				const year = d.getFullYear();
-				const month = String(d.getMonth() + 1).padStart(2, '0');
-				const day = String(d.getDate()).padStart(2, '0');
-				const hours = String(d.getHours()).padStart(2, '0');
-				const minutes = String(d.getMinutes()).padStart(2, '0');
-				return `${year}-${month}-${day}T${hours}:${minutes}`;
+				// Use Intl.DateTimeFormat to get Vietnam timezone parts
+				const vnOptions = { 
+					timeZone: 'Asia/Ho_Chi_Minh', 
+					year: 'numeric', 
+					month: '2-digit', 
+					day: '2-digit', 
+					hour: '2-digit', 
+					minute: '2-digit',
+					hour12: false 
+				};
+				const parts = new Intl.DateTimeFormat('en-CA', vnOptions).formatToParts(d);
+				
+				let year = '', month = '', day = '', hour = '', minute = '';
+				parts.forEach(p => {
+					if (p.type === 'year') year = p.value;
+					if (p.type === 'month') month = p.value;
+					if (p.type === 'day') day = p.value;
+					if (p.type === 'hour') hour = p.value;
+					if (p.type === 'minute') minute = p.value;
+				});
+				
+				return `${year}-${month}-${day}T${hour}:${minute}`;
 			};
 
-			// Format datetime for display
+			// Format datetime for display - Vietnam timezone
 			const formatDateTimeDisplay = (dateStr) => {
 				if (!dateStr) return '-';
 				const d = new Date(dateStr);
@@ -312,19 +410,22 @@
 					month: '2-digit', 
 					day: '2-digit', 
 					hour: '2-digit', 
-					minute: '2-digit' 
+					minute: '2-digit',
+					timeZone: 'Asia/Ho_Chi_Minh'
 				});
 			};
 
 			// Load all books for search
-			fetch('api/db.php')
+			fetch('api/books.php')
 				.then(res => res.json())
 				.then(data => {
-					if (data.success && data.data) {
+					if (Array.isArray(data)) {
+						allBooks = data;
+					} else if (data.data && Array.isArray(data.data)) {
 						allBooks = data.data;
 					}
 				})
-				.catch(() => {});
+				.catch(err => console.error('Error loading books:', err));
 
 			// Load all users for search
 			fetch('api/users.php?per_page=1000')
@@ -336,29 +437,61 @@
 				})
 				.catch(() => {});
 
+			// Update Add Book button state
+			const updateAddBookButtonState = () => {
+				const addBookBtn = document.getElementById('addBookBtn');
+				if (!addBookBtn) return;
+				
+				const activeBooks = rentalBooks.filter(b => !b._deleted).length;
+				if (activeBooks >= MAX_BOOKS) {
+					addBookBtn.disabled = true;
+					addBookBtn.innerHTML = `<i class="bi bi-plus-circle"></i> Maximum ${MAX_BOOKS} books reached`;
+					addBookBtn.classList.add('btn-secondary');
+					addBookBtn.classList.remove('btn-outline-primary');
+				} else {
+					addBookBtn.disabled = false;
+					addBookBtn.innerHTML = '<i class="bi bi-plus-circle"></i> Add Book';
+					addBookBtn.classList.remove('btn-secondary');
+					addBookBtn.classList.add('btn-outline-primary');
+				}
+			};
+
 			// Render books list (show quantity, dates). Allow remove only for newly added items (no rental_item id)
-			const renderBooksList = () => {
+			const renderBooksList = async () => {
 				if (rentalBooks.length === 0) {
 					booksList.innerHTML = '<div class="alert alert-info mb-0">No book selected. Click "Add Book" to select a book for this rental.</div>';
+					updateAddBookButtonState();
 					return;
 				}
 
-				booksList.innerHTML = rentalBooks.map(book => {
+				const activeBooks = rentalBooks.filter(b => !b._deleted);
+				const canRemove = activeBooks.length > 1; // Can only remove if more than 1 book
+
+				booksList.innerHTML = rentalBooks.map((book, idx) => {
 					const qty = book.quantity ?? 1;
 					const start = book.start_date ? formatDateTimeDisplay(book.start_date) : '-';
 					const end = book.end_date ? formatDateTimeDisplay(book.end_date) : '-';
-					const isExisting = !!book.rental_item_id || !!book.rental_id;
-					const coverCandidates = getCoverCandidates(book.cover_image);
-					const dataSrcs = coverCandidates.map(escapeHtml).join('||');
-					const src0 = escapeHtml(coverCandidates[0]);
+					const isExisting = !!book.rental_item_id;
+					const coverImage = book.cover_image || book.cover || book.image;
+					const coverCandidates = getCoverCandidates(coverImage);
+					const dataSrcs = coverCandidates.map(u => encodeURI(String(u))).join('||');
 					return `
-						<div class="book-item" data-book-id="${book.id}" data-rental-item-id="${book.rental_item_id || ''}">
-							<button type="button" class="btn btn-sm ${isExisting ? 'btn-secondary' : 'btn-danger'} btn-remove" ${isExisting ? 'disabled title="Existing item cannot be removed here"' : `onclick="removeBook(${book.id}, ${book.rental_id || 'null'})"`}>
-								<i class="bi bi-trash"></i> ${isExisting ? 'Existing' : 'Remove'}
+						<div class="book-item" data-book-id="${escapeHtml(book.id)}" data-rental-item-id="${escapeHtml(book.rental_item_id || '')}" data-book-idx="${idx}">
+							<button type="button" class="btn btn-sm btn-danger btn-remove" data-book-idx="${idx}" title="${!canRemove ? 'Cannot remove - minimum 1 book required' : (isExisting ? 'Remove existing item' : 'Remove book')}" ${!canRemove ? 'disabled' : ''}>
+								<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z"/></svg>
+								${isExisting ? ' Remove' : ' Remove'}
 							</button>
-							<div class="row align-items-center">
+							<div class="row align-items-start">
 								<div class="col-auto">
-									<img src="${src0}" data-srcs="${dataSrcs}" data-src-idx="0" onerror="window.imgFallback(this)" alt="${escapeHtml(book.title || '')}" class="book-cover-small">
+									<img src="https://via.placeholder.com/80x110?text=No+Cover" 
+										 width="80" height="110" loading="lazy" decoding="async"
+										 data-srcs="${escapeHtml(dataSrcs)}" 
+										 data-src-idx="0"
+										 data-book-id="${escapeHtml(book.id)}"
+										 onerror="window.imgFallback(this)" 
+										 alt="${escapeHtml(book.title || '')}" 
+										 class="book-cover-small" 
+										 style="border: 1px solid #dee2e6;">
 								</div>
 								<div class="col">
 									<h6 class="mb-1">${escapeHtml(book.title || 'N/A')}</h6>
@@ -368,19 +501,54 @@
 										<div><strong>Quantity:</strong> ${qty}</div>
 										<div><strong>Start:</strong> ${start}</div>
 										<div><strong>End:</strong> ${end}</div>
+										${isExisting ? '<div class="mt-2"><span class="badge bg-info">Existing Item</span></div>' : ''}
 									</div>
 								</div>
 							</div>
 						</div>
 					`;
 				}).join('');
+
+				// Attach remove button event listeners
+				booksList.querySelectorAll('.btn-remove').forEach(btn => {
+					btn.addEventListener('click', async (e) => {
+						e.preventDefault();
+						e.stopPropagation();
+						
+						// Double check if removal is allowed
+						const activeBooks = rentalBooks.filter(b => !b._deleted);
+						if (activeBooks.length <= 1) {
+							alert('Cannot remove - at least 1 book is required for a rental.');
+							return;
+						}
+						
+						const bookIdx = parseInt(btn.dataset.bookIdx);
+						if (bookIdx >= 0 && bookIdx < rentalBooks.length) {
+							await removeBookByIndex(bookIdx, btn);
+						}
+					});
+				});
+
+				// Initialize images using robust candidate testing
 				initImages(booksList);
+				await initBookImages(booksList).catch(err => console.debug('initBookImages failed', err));
+				
+				// Update add button state after rendering
+				updateAddBookButtonState();
 			};
 
 			// Add book to list (now: if editing existing rental, call API to add item)
 			window.addBookToRental = async (bookId) => {
 				const book = allBooks.find(b => b.id === bookId);
 				if (!book) return;
+
+				// Check maximum books limit
+				const activeBooks = rentalBooks.filter(b => !b._deleted);
+				if (activeBooks.length >= MAX_BOOKS) {
+					alert(`You can only add up to ${MAX_BOOKS} books per rental.`);
+					bookSearchModal.hide();
+					return;
+				}
 
 				// Check if already added locally
 				if (rentalBooks.some(b => b.id === bookId && !b._deleted)) {
@@ -426,7 +594,7 @@
 							rental_id: item.rental_id,
 							rental_item_id: item.id,
 						});
-						renderBooksList();
+						await renderBooksList();
 						bookSearchModal.hide();
 					} catch (err) {
 						alert(err.message || 'Unable to add book to rental.');
@@ -436,41 +604,50 @@
 
 				// If creating new (no rental id yet), just push locally
 				rentalBooks.push({ ...book, rental_id: null, quantity: 1 });
-				renderBooksList();
+				await renderBooksList();
 				bookSearchModal.hide();
 			};
 
-			// Remove book from list (if item exists on server, call DELETE)
-			window.removeBook = async (bookId, rentalId) => {
+			// Remove book from list by index
+			const removeBookByIndex = async (idx, btnElement) => {
 				if (!confirm('Are you sure you want to remove this book from the rental?')) return;
 
-				// find local item
-				const idx = rentalBooks.findIndex(b => b.id === bookId && (b.rental_id === rentalId || !rentalId));
-				if (idx === -1) return;
-
+				if (idx < 0 || idx >= rentalBooks.length) return;
 				const item = rentalBooks[idx];
-				// If item exists on server (has rental_item_id) -> delete via API
-				if (item.rental_item_id) {
-					try {
+
+				if (btnElement) {
+					btnElement.disabled = true;
+					btnElement.innerHTML = 'Removing...';
+				}
+
+				try {
+					// If item exists on server (has rental_item_id) -> delete via API
+					if (item.rental_item_id) {
+						console.log('Deleting item:', item.rental_item_id);
 						const res = await fetch('api/rentals.php', {
 							method: 'DELETE',
 							headers: { 'Content-Type': 'application/json' },
-							body: JSON.stringify({ item_id: item.rental_item_id })
+							body: JSON.stringify({ 
+								action: 'delete_item',
+								item_id: item.rental_item_id 
+							})
 						});
 						const data = await res.json();
+						console.log('Delete response:', data);
 						if (!res.ok || data?.error) throw new Error(data?.error || 'Failed to delete item');
-						// remove locally
-						rentalBooks.splice(idx, 1);
-						renderBooksList();
-					} catch (err) {
-						alert(err.message || 'Unable to remove book from rental.');
 					}
-					return;
-				}
 
-				// Otherwise simply remove locally
-				rentalBooks.splice(idx, 1);
-				renderBooksList();
+					// Remove from local array
+					rentalBooks.splice(idx, 1);
+					await renderBooksList();
+				} catch (err) {
+					console.error('Remove error:', err);
+					alert(err.message || 'Unable to remove book from rental.');
+					if (btnElement) {
+						btnElement.disabled = false;
+						btnElement.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z"/></svg> Remove';
+					}
+				}
 			};
 
 			// Render books in search modal
@@ -523,6 +700,12 @@
 
 			// Show add book modal
 			document.getElementById('addBookBtn').addEventListener('click', () => {
+				const activeBooks = rentalBooks.filter(b => !b._deleted);
+				if (activeBooks.length >= MAX_BOOKS) {
+					alert(`You can only add up to ${MAX_BOOKS} books per rental.`);
+					return;
+				}
+				
 				bookSearchInput.value = '';
 				// Show all books when modal opens (if loaded)
 				if (allBooks.length > 0) {
@@ -654,7 +837,7 @@
 			// Load rental data (use rental.items)
 			fetch(`api/rentals.php?id=${encodeURIComponent(id)}`)
 				.then((res) => res.json().then((data) => ({ ok: res.ok, data })))
-				.then(({ ok, data }) => {
+				.then(async ({ ok, data }) => {
 					if (!ok || data?.error || !data?.data) throw new Error(data?.error ?? 'Rental not found.');
 					const rental = data.data;
 
@@ -696,16 +879,33 @@
 							rental_id: rental.id,
 							rental_item_id: it.id, // item id
 						}));
-						renderBooksList();
+						await renderBooksList();
 					} else {
-						renderBooksList();
+						await renderBooksList();
 					}
 
 					// Rental Details
 					form.querySelector('#rentalDate').value = formatDateTimeDisplay(rental.rental_date);
 					form.querySelector('#dueDate').value = formatDateTimeLocal(rental.due_date);
 					form.querySelector('#returnDate').value = formatDateTimeLocal(rental.return_date);
-					form.querySelector('#status').value = rental.status ?? 'active';
+					
+					// Set status and update options based on current status
+					const statusSelect = form.querySelector('#status');
+					statusSelect.value = rental.status ?? 'active';
+					
+					// Disable "Overdue" option if current status is "Active"
+					// (Overdue should only be set automatically by the system)
+					const overdueOption = statusSelect.querySelector('option[value="overdue"]');
+					if (overdueOption) {
+						if (rental.status === 'active') {
+							overdueOption.disabled = true;
+							overdueOption.textContent = 'Overdue (Auto-set by system)';
+						} else {
+							overdueOption.disabled = false;
+							overdueOption.textContent = 'Overdue';
+						}
+					}
+					
 					form.querySelector('#notes').value = rental.notes ?? '';
 				})
 				.catch((error) => { 

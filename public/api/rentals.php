@@ -3,6 +3,9 @@ error_reporting(E_ALL);
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 
+// Set timezone to Vietnam
+date_default_timezone_set('Asia/Ho_Chi_Minh');
+
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
@@ -31,11 +34,43 @@ function respond($data, int $code = 200) {
 	exit;
 }
 
+// Function to auto-update overdue rentals
+function updateOverdueRentals($pdo) {
+	try {
+		// Update book_rentals that are past due date and still active
+		$stmt = $pdo->prepare("
+			UPDATE book_rentals 
+			SET status = 'overdue' 
+			WHERE status = 'active' 
+			AND due_date IS NOT NULL 
+			AND due_date < NOW()
+			AND deleted_at IS NULL
+		");
+		$stmt->execute();
+		
+		// Also update rental_items that are past end_date and still active
+		$stmt2 = $pdo->prepare("
+			UPDATE rental_items 
+			SET status = 'overdue' 
+			WHERE status = 'active' 
+			AND end_date IS NOT NULL 
+			AND end_date < NOW()
+		");
+		$stmt2->execute();
+	} catch (Exception $e) {
+		// Log error but don't stop execution
+		error_log('Failed to update overdue rentals: ' . $e->getMessage());
+	}
+}
+
 $method = $_SERVER['REQUEST_METHOD'];
 $body = json_decode(file_get_contents('php://input'), true) ?? [];
 
 // GET - List or single rental (header + items)
 if ($method === 'GET') {
+	// Auto-update overdue status before fetching
+	updateOverdueRentals($pdo);
+	
 	$id = isset($_GET['id']) ? (int)$_GET['id'] : null;
 	if ($id) {
 		$stmt = $pdo->prepare('
@@ -71,11 +106,19 @@ if ($method === 'GET') {
 	$where = [];
 	$params = [];
 
+	// Search across multiple columns
 	if ($q !== '') {
-		$like = "%{$q}%";
-		$where[] = '(u.name LIKE :q OR u.email LIKE :q OR r.notes LIKE :q)';
-		$params[':q'] = $like;
+		$likeTerm = "%{$q}%";
+		$searchConditions = [];
+		$searchColumns = ['u.name', 'u.email', 'r.notes'];
+		foreach ($searchColumns as $column) {
+			$paramName = ":term_" . str_replace('.', '_', $column);
+			$searchConditions[] = "{$column} LIKE {$paramName}";
+			$params[$paramName] = $likeTerm;
+		}
+		$where[] = '(' . implode(' OR ', $searchConditions) . ')';
 	}
+
 	if ($status) {
 		$where[] = 'r.status = :status';
 		$params[':status'] = $status;
@@ -99,7 +142,6 @@ if ($method === 'GET') {
 		$count->execute($params);
 		$total = (int)$count->fetchColumn();
 
-		// Include aggregated book_titles in list select for UI
 		$sql = "
 			SELECT DISTINCT r.*, u.name as user_name, u.email as user_email,
 			       (SELECT GROUP_CONCAT(b2.title SEPARATOR ', ')
@@ -304,6 +346,8 @@ if ($method === 'PUT') {
 	try {
 		$fields = [];
 		$params = [':id' => $id];
+		$statusChanged = false;
+		$newStatus = null;
 
 		if (array_key_exists('user_id', $body)) {
 			$newUser = (int)$body['user_id'];
@@ -317,25 +361,110 @@ if ($method === 'PUT') {
 			$fields[] = 'notes = :notes';
 			$params[':notes'] = $body['notes'];
 		}
-		if (array_key_exists('due_date', $body)) {
-			$fields[] = 'due_date = :due_date';
-			$params[':due_date'] = $body['due_date'];
+
+		// Check if status is being changed
+		if (array_key_exists('status', $body)) {
+			$newStatus = $body['status'];
+			
+			// Prevent manually changing from 'active' to 'overdue'
+			// Overdue status should only be set automatically by the system
+			if ($rentalData['status'] === 'active' && $newStatus === 'overdue') {
+				$pdo->rollBack();
+				respond(['error' => 'Cannot manually change status from Active to Overdue. Overdue status is set automatically when due date passes.'], 422);
+			}
+			
+			$statusChanged = ($rentalData['status'] === 'overdue' && $newStatus === 'active');
 		}
 
-		// Return whole rental: restore stock for active items and mark items returned
+		// Handle due_date update
+		$newDueDate = null;
+		$dueDateProvided = array_key_exists('due_date', $body) && !empty($body['due_date']);
+		
+		if ($dueDateProvided) {
+			$newDueDate = $body['due_date'];
+		}
+		
+		// If changing from overdue to active, auto-extend due_date by 1 day from now
+		if ($statusChanged && $newStatus === 'active') {
+			// Always extend due_date by 1 day when reactivating from overdue
+			$extendedDueDate = date('Y-m-d H:i:s', strtotime('+1 day'));
+			$newDueDate = $extendedDueDate;
+			
+			$fields[] = 'due_date = :due_date';
+			$params[':due_date'] = $newDueDate;
+			
+			$fields[] = 'status = :status';
+			$params[':status'] = 'active';
+			
+			// Also update rental_items to active and extend end_date
+			$pdo->prepare("
+				UPDATE rental_items 
+				SET status = 'active', end_date = :new_end_date 
+				WHERE rental_id = :rid AND status = 'overdue'
+			")->execute([':new_end_date' => $newDueDate, ':rid' => $id]);
+			
+		} else {
+			// Normal due_date update (not reactivating from overdue)
+			if ($dueDateProvided) {
+				$fields[] = 'due_date = :due_date';
+				$params[':due_date'] = $newDueDate;
+				
+				// If current status is 'overdue' and new due_date is in the future, revert to 'active'
+				if ($rentalData['status'] === 'overdue') {
+					$newDueDateTimestamp = strtotime($newDueDate);
+					$nowTimestamp = time();
+					
+					if ($newDueDateTimestamp > $nowTimestamp) {
+						// Due date is extended to future - revert status to active
+						if (!array_key_exists('status', $body) || $body['status'] === 'overdue') {
+							$fields[] = 'status = :status';
+							$params[':status'] = 'active';
+							
+							// Also update rental_items to active if they were overdue
+							$pdo->prepare("
+								UPDATE rental_items 
+								SET status = 'active', end_date = :new_end_date 
+								WHERE rental_id = :rid AND status = 'overdue'
+							")->execute([':new_end_date' => $newDueDate, ':rid' => $id]);
+						}
+					}
+				}
+			}
+		}
+
+		// Handle return_date field
+		$returnDate = $body['return_date'] ?? null;
+		if (!$returnDate && ((array_key_exists('return_all', $body) && $body['return_all']) || (array_key_exists('status', $body) && $body['status'] === 'returned'))) {
+			$returnDate = date('Y-m-d H:i:s');
+		}
+
+		// Return whole rental: restore stock for active/overdue items and mark items returned
 		if ((array_key_exists('return_all', $body) && $body['return_all']) || (array_key_exists('status', $body) && $body['status'] === 'returned')) {
-			$it = $pdo->prepare("SELECT book_id, quantity, id FROM rental_items WHERE rental_id = :rid AND status = 'active'");
+			$it = $pdo->prepare("SELECT book_id, quantity, id FROM rental_items WHERE rental_id = :rid AND status IN ('active', 'overdue')");
 			$it->execute([':rid' => $id]);
 			$activeItems = $it->fetchAll();
 			foreach ($activeItems as $ai) {
 				$pdo->prepare('UPDATE books SET stock = stock + :qty WHERE id = :id')->execute([':qty' => $ai['quantity'], ':id' => $ai['book_id']]);
-				$pdo->prepare('UPDATE rental_items SET status = "returned", end_date = :end_date WHERE id = :iid')->execute([':end_date' => $body['return_date'] ?? date('Y-m-d H:i:s'), ':iid' => $ai['id']]);
+				$pdo->prepare('UPDATE rental_items SET status = "returned", end_date = :end_date WHERE id = :iid')->execute([':end_date' => $returnDate, ':iid' => $ai['id']]);
 			}
+			// Remove any previously set status field to avoid conflict
+			$fields = array_filter($fields, fn($f) => strpos($f, 'status =') === false);
+			unset($params[':status']);
+			
 			$fields[] = 'status = :status';
 			$params[':status'] = 'returned';
-		} elseif (array_key_exists('status', $body)) {
+			$fields[] = 'return_date = :return_date';
+			$params[':return_date'] = $returnDate;
+		} elseif (array_key_exists('status', $body) && !in_array('status = :status', $fields)) {
+			// Only add status if not already added
 			$fields[] = 'status = :status';
 			$params[':status'] = $body['status'];
+		}
+
+		// Allow updating return_date independently
+		if (array_key_exists('return_date', $body) && !in_array('return_date = :return_date', $fields)) {
+			$fields[] = 'return_date = :return_date';
+			$params[':return_date'] = $body['return_date'];
 		}
 
 		if ($fields) {
@@ -360,6 +489,35 @@ if ($method === 'PUT') {
 
 // DELETE
 if ($method === 'DELETE') {
+	// Delete single rental item (with action=delete_item)
+	if (isset($body['action']) && $body['action'] === 'delete_item') {
+		$itemId = isset($body['item_id']) ? (int)$body['item_id'] : 0;
+		if (!$itemId) respond(['error' => 'item_id required'], 422);
+
+		$pdo->beginTransaction();
+		try {
+			// Get item details
+			$itemStmt = $pdo->prepare('SELECT * FROM rental_items WHERE id = :id');
+			$itemStmt->execute([':id' => $itemId]);
+			$item = $itemStmt->fetch();
+			if (!$item) { $pdo->rollBack(); respond(['error' => 'Item not found'], 404); }
+
+			// Restore book stock
+			$pdo->prepare('UPDATE books SET stock = stock + :qty WHERE id = :id')->execute([':qty' => $item['quantity'], ':id' => $item['book_id']]);
+
+			// Delete item
+			$delStmt = $pdo->prepare('DELETE FROM rental_items WHERE id = :id');
+			$delStmt->execute([':id' => $itemId]);
+
+			$pdo->commit();
+			respond(['success' => true, 'deleted' => 1]);
+		} catch (Exception $e) {
+			$pdo->rollBack();
+			respond(['error' => 'Failed to delete item: ' . $e->getMessage()], 500);
+		}
+	}
+
+	// Soft delete entire rental (set deleted_at timestamp)
 	if (isset($body['id'])) {
 		$rentalId = (int)$body['id'];
 		$rental = $pdo->prepare('SELECT * FROM book_rentals WHERE id = :id');
@@ -367,43 +525,26 @@ if ($method === 'DELETE') {
 		$rentalData = $rental->fetch();
 		if (!$rentalData) respond(['error' => 'Rental not found'], 404);
 
-		$pdo->beginTransaction();
 		try {
-			$it = $pdo->prepare("SELECT book_id, quantity FROM rental_items WHERE rental_id = :rid AND status = 'active'");
-			$it->execute([':rid' => $rentalId]);
-			foreach ($it->fetchAll() as $ai) {
-				$pdo->prepare('UPDATE books SET stock = stock + :qty WHERE id = :id')->execute([':qty' => $ai['quantity'], ':id' => $ai['book_id']]);
-			}
-			$pdo->prepare('DELETE FROM rental_items WHERE rental_id = :rid')->execute([':rid' => $rentalId]);
-			$pdo->prepare('DELETE FROM book_rentals WHERE id = :id')->execute([':id' => $rentalId]);
-
-			$pdo->commit();
-			respond(['deleted' => 1]);
+			// Soft delete: set deleted_at timestamp instead of actually deleting
+			$stmt = $pdo->prepare('UPDATE book_rentals SET deleted_at = NOW() WHERE id = :id');
+			$stmt->execute([':id' => $rentalId]);
+			respond(['success' => true, 'deleted' => 1]);
 		} catch (Exception $e) {
-			$pdo->rollBack();
 			respond(['error' => 'Failed to delete rental: ' . $e->getMessage()], 500);
 		}
 	}
 
+	// Delete multiple rentals by ids (soft delete)
 	if (!empty($body['ids']) && is_array($body['ids'])) {
 		$ids = array_map('intval', $body['ids']);
 		if (empty($ids)) respond(['deleted' => 0]);
-		$pdo->beginTransaction();
 		try {
 			$ph = implode(',', array_fill(0, count($ids), '?'));
-			$stmt = $pdo->prepare("SELECT book_id, SUM(quantity) as qty_sum FROM rental_items WHERE rental_id IN ($ph) AND status = 'active' GROUP BY book_id");
+			$stmt = $pdo->prepare("UPDATE book_rentals SET deleted_at = NOW() WHERE id IN ($ph)");
 			$stmt->execute($ids);
-			foreach ($stmt->fetchAll() as $row) {
-				$pdo->prepare('UPDATE books SET stock = stock + :qty WHERE id = :id')->execute([':qty' => $row['qty_sum'], ':id' => $row['book_id']]);
-			}
-			$delItems = $pdo->prepare("DELETE FROM rental_items WHERE rental_id IN ($ph)");
-			$delItems->execute($ids);
-			$del = $pdo->prepare("DELETE FROM book_rentals WHERE id IN ($ph)");
-			$del->execute($ids);
-			$pdo->commit();
-			respond(['deleted' => $del->rowCount()]);
+			respond(['success' => true, 'deleted' => $stmt->rowCount()]);
 		} catch (Exception $e) {
-			$pdo->rollBack();
 			respond(['error' => 'Failed to delete rentals: ' . $e->getMessage()], 500);
 		}
 	}

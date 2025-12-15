@@ -1,0 +1,624 @@
+<!doctype html>
+<html lang="vi">
+<head>
+	<meta charset="utf-8">
+	<title>Dashboard - Book Management</title>
+	<meta name="viewport" content="width=device-width,initial-scale=1">
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+	<link rel="stylesheet" href="css/style.css">
+	<style>
+		.stat-card {
+			border-radius: 0.75rem;
+			transition: transform 0.2s, box-shadow 0.2s;
+		}
+		.stat-card:hover {
+			transform: translateY(-2px);
+			box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+		}
+		.stat-icon {
+			width: 48px;
+			height: 48px;
+			border-radius: 0.5rem;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+		}
+		.stat-number {
+			font-size: 1.75rem;
+			font-weight: 700;
+		}
+		.activity-item {
+			padding: 0.75rem 0;
+			border-bottom: 1px solid #e9ecef;
+		}
+		.activity-item:last-child {
+			border-bottom: none;
+		}
+		.activity-icon {
+			width: 36px;
+			height: 36px;
+			border-radius: 50%;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			flex-shrink: 0;
+		}
+		.activity-time {
+			font-size: 0.75rem;
+			color: #6c757d;
+		}
+		.overdue-alert {
+			background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+			color: white;
+		}
+		.progress-stat {
+			height: 8px;
+			border-radius: 4px;
+		}
+	</style>
+</head>
+<body class="bg-light d-flex flex-column min-vh-100">
+	<div id="navbarInclude" data-include="../include/navbar.html"></div>
+	<div class="layout-wrapper">
+		<div id="sidebarInclude" data-include="../include/sidebar.html"></div>
+		<div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+		<main class="content-area">
+			<div class="container-fluid py-4">
+				<h1 class="mb-4 text-primary" style="font-size: 25px;">Dashboard</h1>
+
+				<div class="row">
+					<!-- Left Column - Statistics -->
+					<div class="col-lg-8">
+						<!-- Overdue Alert -->
+						<div id="overdueAlert" class="card stat-card overdue-alert mb-4 d-none">
+							<div class="card-body d-flex align-items-center">
+								<div class="stat-icon bg-white bg-opacity-25 me-3">
+									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+										<path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/>
+									</svg>
+								</div>
+								<div class="flex-grow-1">
+									<h5 class="mb-1">Cảnh báo quá hạn!</h5>
+									<p class="mb-0">Có <strong id="overdueCount">0</strong> đơn thuê sách đang quá hạn cần xử lý.</p>
+								</div>
+								<a href="index-rental.html?status=overdue" class="btn btn-light btn-sm">Xem chi tiết</a>
+							</div>
+						</div>
+
+						<!-- Main Stats Row -->
+						<div class="row g-3 mb-4">
+							<!-- Total Books -->
+							<div class="col-sm-6 col-xl-2">
+								<div class="card stat-card h-100 border-0 shadow-sm">
+									<div class="card-body">
+										<div class="d-flex align-items-center">
+											<div class="stat-icon bg-primary bg-opacity-10 text-primary me-3">
+												<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+													<path d="M1 2.828c.885-.37 2.154-.769 3.388-.893 1.33-.134 2.458.063 3.112.752v9.746c-.935-.53-2.12-.603-3.213-.493-1.18.12-2.37.461-3.287.811V2.828zm7.5-.141c.654-.689 1.782-.886 3.112-.752 1.234.124 2.503.523 3.388.893v9.923c-.918-.35-2.107-.692-3.287-.81-1.094-.111-2.278-.039-3.213.492V2.687zM8 1.783C7.015.936 5.587.81 4.287.94c-1.514.153-3.042.672-3.994 1.105A.5.5 0 0 0 0 2.5v11a.5.5 0 0 0 .707.455c.882-.4 2.303-.881 3.68-1.02 1.409-.142 2.59.087 3.223.877a.5.5 0 0 0 .78 0c.633-.79 1.814-1.019 3.222-.877 1.378.139 2.8.62 3.681 1.02A.5.5 0 0 0 16 13.5v-11a.5.5 0 0 0-.293-.455c-.952-.433-2.48-.952-3.994-1.105C10.413.809 8.985.936 8 1.783z"/>
+												</svg>
+											</div>
+											<div>
+												<div class="text-muted small">Tổng sách</div>
+												<div class="stat-number text-primary" id="totalBooks">-</div>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+
+							<!-- Total Categories -->
+							<div class="col-sm-6 col-xl-2">
+								<div class="card stat-card h-100 border-0 shadow-sm">
+									<div class="card-body">
+										<div class="d-flex align-items-center">
+											<div class="stat-icon bg-success bg-opacity-10 text-success me-3">
+												<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+													<path d="M2.5 3.5a.5.5 0 0 1 0-1h11a.5.5 0 0 1 0 1h-11zm2-2a.5.5 0 0 1 0-1h7a.5.5 0 0 1 0 1h-7zM0 13a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 16 13V6a1.5 1.5 0 0 0-1.5-1.5h-13A1.5 1.5 0 0 0 0 6v7zm1.5.5A.5.5 0 0 1 1 13V6a.5.5 0 0 1 .5-.5h13a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-.5.5h-13z"/>
+												</svg>
+											</div>
+											<div>
+												<div class="text-muted small">Thể loại</div>
+												<div class="stat-number text-success" id="totalCategories">-</div>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+
+							<!-- Total Authors -->
+							<div class="col-sm-6 col-xl-2">
+								<div class="card stat-card h-100 border-0 shadow-sm">
+									<div class="card-body">
+										<div class="d-flex align-items-center">
+											<div class="stat-icon bg-purple bg-opacity-10 text-purple me-3" style="background-color: rgba(111, 66, 193, 0.1); color: #6f42c1;">
+												<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+													<path d="M12.5 16a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm.5-5v1h1a.5.5 0 0 1 0 1h-1v1a.5.5 0 0 1-1 0v-1h-1a.5.5 0 0 1 0-1h1v-1a.5.5 0 0 1 1 0Zm-2-6a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM8 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/>
+													<path d="M8.256 14a4.474 4.474 0 0 1-.229-1.004H3c.001-.246.154-.986.832-1.664C4.484 10.68 5.711 10 8 10c.26 0 .507.009.74.025.226-.341.496-.65.804-.918C9.077 9.038 8.564 9 8 9c-5 0-6 3-6 4s1 1 1 1h5.256Z"/>
+												</svg>
+											</div>
+											<div>
+												<div class="text-muted small">Tác giả</div>
+												<div class="stat-number" style="color: #6f42c1;" id="totalAuthors">-</div>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+
+							<!-- Total Publishers -->
+							<div class="col-sm-6 col-xl-2">
+								<div class="card stat-card h-100 border-0 shadow-sm">
+									<div class="card-body">
+										<div class="d-flex align-items-center">
+											<div class="stat-icon bg-opacity-10 me-3" style="background-color: rgba(253, 126, 20, 0.1); color: #fd7e14;">
+												<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+													<path d="M1 2a1 1 0 0 1 1-1h11a1 1 0 0 1 1 1v1h.5A1.5 1.5 0 0 1 16 4.5v7a1.5 1.5 0 0 1-1.5 1.5h-.55a2.5 2.5 0 0 1-2.45 2h-8A2.5 2.5 0 0 1 1 12.5V2Zm13 10h.5a.5.5 0 0 0 .5-.5v-7a.5.5 0 0 0-.5-.5H14v8ZM2 2v10.5A1.5 1.5 0 0 0 3.5 14h8a1.5 1.5 0 0 0 1.5-1.5V2H2Z"/>
+													<path d="M3 3h9v2H3V3Zm0 3h9v1H3V6Zm0 2h6v1H3V8Z"/>
+												</svg>
+											</div>
+											<div>
+												<div class="text-muted small">Nhà xuất bản</div>
+												<div class="stat-number" style="color: #fd7e14;" id="totalPublishers">-</div>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+
+							<!-- Total Users -->
+							<div class="col-sm-6 col-xl-2">
+								<div class="card stat-card h-100 border-0 shadow-sm">
+									<div class="card-body">
+										<div class="d-flex align-items-center">
+											<div class="stat-icon bg-info bg-opacity-10 text-info me-3">
+												<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+													<path d="M15 14s1 0 1-1-1-4-5-4-5 3-5 4 1 1 1 1h8zm-7.978-1A.261.261 0 0 1 7 12.996c.001-.264.167-1.03.76-1.72C8.312 10.629 9.282 10 11 10c1.717 0 2.687.63 3.24 1.276.593.69.758 1.457.76 1.72l-.008.002a.274.274 0 0 1-.014.002H7.022zM11 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm3-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM6.936 9.28a5.88 5.88 0 0 0-1.23-.247A7.35 7.35 0 0 0 5 9c-4 0-5 3-5 4 0 .667.333 1 1 1h4.216A2.238 2.238 0 0 1 5 13c0-1.01.377-2.042 1.09-2.904.243-.294.526-.569.846-.816zM4.92 10A5.493 5.493 0 0 0 4 13H1c0-.26.164-1.03.76-1.724.545-.636 1.492-1.256 3.16-1.275zM1.5 5.5a3 3 0 1 1 6 0 3 3 0 0 1-6 0zm3-2a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
+												</svg>
+											</div>
+											<div>
+												<div class="text-muted small">Người dùng</div>
+												<div class="stat-number text-info" id="totalUsers">-</div>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+
+							<!-- Total Rentals -->
+							<div class="col-sm-6 col-xl-2">
+								<div class="card stat-card h-100 border-0 shadow-sm">
+									<div class="card-body">
+										<div class="d-flex align-items-center">
+											<div class="stat-icon bg-warning bg-opacity-10 text-warning me-3">
+												<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+													<path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zm-3 0A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5h-2z"/>
+													<path d="M4.5 12.5A.5.5 0 0 1 5 12h3a.5.5 0 0 1 0 1H5a.5.5 0 0 1-.5-.5zm0-2A.5.5 0 0 1 5 10h6a.5.5 0 0 1 0 1H5a.5.5 0 0 1-.5-.5zm1.639-3.708 1.33.886 1.854-1.855a.25.25 0 0 1 .289-.047l1.888.974V8.5a.5.5 0 0 1-.5.5H5a.5.5 0 0 1-.5-.5V8s1.54-1.274 1.639-1.208zM6.25 6a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5z"/>
+												</svg>
+											</div>
+											<div>
+												<div class="text-muted small">Đơn thuê</div>
+												<div class="stat-number text-warning" id="totalRentals">-</div>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<!-- Rental Status Stats -->
+						<div class="card border-0 shadow-sm mb-4">
+							<div class="card-header bg-white border-0">
+								<h5 class="mb-0">Thống kê đơn thuê sách</h5>
+							</div>
+							<div class="card-body">
+								<div class="row g-4">
+									<!-- Active Rentals -->
+									<div class="col-md-4">
+										<div class="d-flex align-items-center mb-2">
+											<span class="badge bg-success me-2">Active</span>
+											<span class="text-muted small">Đang thuê</span>
+										</div>
+										<div class="d-flex align-items-baseline">
+											<span class="h3 mb-0 me-2" id="activeRentals">-</span>
+											<span class="text-muted small">/ <span id="totalRentalsForActive">-</span> đơn</span>
+										</div>
+										<div class="progress progress-stat mt-2">
+											<div class="progress-bar bg-success" id="activeProgress" style="width: 0%"></div>
+										</div>
+									</div>
+
+									<!-- Overdue Rentals -->
+									<div class="col-md-4">
+										<div class="d-flex align-items-center mb-2">
+											<span class="badge bg-danger me-2">Overdue</span>
+											<span class="text-muted small">Quá hạn</span>
+										</div>
+										<div class="d-flex align-items-baseline">
+											<span class="h3 mb-0 me-2" id="overdueRentals">-</span>
+											<span class="text-muted small">/ <span id="totalRentalsForOverdue">-</span> đơn</span>
+										</div>
+										<div class="progress progress-stat mt-2">
+											<div class="progress-bar bg-danger" id="overdueProgress" style="width: 0%"></div>
+										</div>
+									</div>
+
+									<!-- Returned Rentals -->
+									<div class="col-md-4">
+										<div class="d-flex align-items-center mb-2">
+											<span class="badge bg-secondary me-2">Returned</span>
+											<span class="text-muted small">Đã trả</span>
+										</div>
+										<div class="d-flex align-items-baseline">
+											<span class="h3 mb-0 me-2" id="returnedRentals">-</span>
+											<span class="text-muted small">/ <span id="totalRentalsForReturned">-</span> đơn</span>
+										</div>
+										<div class="progress progress-stat mt-2">
+											<div class="progress-bar bg-secondary" id="returnedProgress" style="width: 0%"></div>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<!-- Book Stats -->
+						<div class="card border-0 shadow-sm">
+							<div class="card-header bg-white border-0">
+								<h5 class="mb-0">Thống kê sách</h5>
+							</div>
+							<div class="card-body">
+								<div class="row g-4">
+									<div class="col-md-4">
+										<div class="text-muted small mb-1">Sách cho thuê</div>
+										<div class="h4 mb-0" id="rentalBooks">-</div>
+									</div>
+									<div class="col-md-4">
+										<div class="text-muted small mb-1">Sách bán</div>
+										<div class="h4 mb-0" id="saleBooks">-</div>
+									</div>
+									<div class="col-md-4">
+										<div class="text-muted small mb-1">Tổng tồn kho</div>
+										<div class="h4 mb-0" id="totalStock">-</div>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<!-- Right Column - Recent Activities -->
+					<div class="col-lg-4">
+						<div class="card border-0 shadow-sm h-100">
+							<div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
+								<h5 class="mb-0">Hoạt động gần đây</h5>
+								<button class="btn btn-sm btn-outline-primary" id="refreshActivities">
+									<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+										<path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
+										<path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
+									</svg>
+								</button>
+							</div>
+							<div class="card-body p-0" style="max-height: 600px; overflow-y: auto;">
+								<div id="activitiesList" class="px-3">
+									<div class="text-center text-muted py-4">
+										<div class="spinner-border spinner-border-sm me-2"></div>
+										Đang tải...
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</main>
+	</div>
+	<div id="footerInclude" class="layout-footer" data-include="../include/footer.html"></div>
+
+	<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+	<script src="js/layout.js"></script>
+	<script>
+		document.querySelectorAll('[data-include]').forEach((node) => {
+			fetch(node.dataset.include)
+				.then((res) => (res.ok ? res.text() : Promise.reject(res.statusText)))
+				.then((html) => {
+					node.innerHTML = html;
+					node.querySelectorAll('script').forEach((oldScript) => {
+						const newScript = document.createElement('script');
+						if (oldScript.src) newScript.src = oldScript.src;
+						else newScript.textContent = oldScript.textContent;
+						oldScript.parentNode.replaceChild(newScript, oldScript);
+					});
+					window.initLayout?.();
+				})
+				.catch(() => { node.innerHTML = '<div class="alert alert-warning m-0">Unable to load layout section.</div>'; });
+		});
+	</script>
+	<script>
+		(() => {
+			const escapeHtml = (text) => {
+				if (text === null || text === undefined) return '';
+				const div = document.createElement('div');
+				div.textContent = String(text);
+				return div.innerHTML;
+			};
+
+			const formatDate = (dateStr) => {
+				if (!dateStr) return '-';
+				const d = new Date(dateStr);
+				return d.toLocaleString('vi-VN', {
+					year: 'numeric',
+					month: '2-digit',
+					day: '2-digit',
+					hour: '2-digit',
+					minute: '2-digit',
+					timeZone: 'Asia/Ho_Chi_Minh'
+				});
+			};
+
+			const formatTimeAgo = (dateStr) => {
+				if (!dateStr) return '';
+				const d = new Date(dateStr);
+				const now = new Date();
+				const diffMs = now - d;
+				const diffMins = Math.floor(diffMs / 60000);
+				const diffHours = Math.floor(diffMs / 3600000);
+				const diffDays = Math.floor(diffMs / 86400000);
+
+				if (diffMins < 1) return 'Vừa xong';
+				if (diffMins < 60) return `${diffMins} phút trước`;
+				if (diffHours < 24) return `${diffHours} giờ trước`;
+				if (diffDays < 7) return `${diffDays} ngày trước`;
+				return formatDate(dateStr);
+			};
+
+			// Load Statistics
+			const loadStats = async () => {
+				try {
+					// Load books stats
+					let totalBooks = 0, rentalBooks = 0, saleBooks = 0, totalStock = 0;
+					try {
+						const booksRes = await fetch('api/books.php?per_page=10000');
+						if (booksRes.ok) {
+							const booksData = await booksRes.json();
+							const books = Array.isArray(booksData) ? booksData : (booksData.data || []);
+							const filteredBooks = books.filter(b => !b.deleted_at);
+							totalBooks = filteredBooks.length;
+							rentalBooks = filteredBooks.filter(b => b.is_rental == 1 || b.is_rental === true || b.is_rental === '1').length;
+							saleBooks = filteredBooks.filter(b => b.is_sale == 1 || b.is_sale === true || b.is_sale === '1').length;
+							totalStock = filteredBooks.reduce((sum, b) => sum + (parseInt(b.stock) || 0), 0);
+						}
+					} catch (e) { console.error('Books API error:', e); }
+					
+					document.getElementById('totalBooks').textContent = totalBooks;
+					document.getElementById('rentalBooks').textContent = rentalBooks;
+					document.getElementById('saleBooks').textContent = saleBooks;
+					document.getElementById('totalStock').textContent = totalStock;
+
+					// Load categories stats
+					let totalCategories = 0;
+					try {
+						const catsRes = await fetch('api/categories.php?per_page=10000');
+						if (catsRes.ok) {
+							const catsData = await catsRes.json();
+							const categories = Array.isArray(catsData) ? catsData : (catsData.data || []);
+							totalCategories = Array.isArray(categories) ? categories.length : 0;
+						}
+					} catch (e) { console.error('Categories API error:', e); }
+					document.getElementById('totalCategories').textContent = totalCategories;
+
+					// Load authors stats
+					let totalAuthors = 0;
+					try {
+						const authorsRes = await fetch('api/authors.php?per_page=10000');
+						if (authorsRes.ok) {
+							const authorsData = await authorsRes.json();
+							const authors = Array.isArray(authorsData) ? authorsData : (authorsData.data || []);
+							totalAuthors = authors.filter(a => !a.deleted_at).length;
+						}
+					} catch (e) { console.error('Authors API error:', e); }
+					document.getElementById('totalAuthors').textContent = totalAuthors;
+
+					// Load publishers stats
+					let totalPublishers = 0;
+					try {
+						const publishersRes = await fetch('api/publishers.php?per_page=10000');
+						if (publishersRes.ok) {
+							const publishersData = await publishersRes.json();
+							const publishers = Array.isArray(publishersData) ? publishersData : (publishersData.data || []);
+							totalPublishers = publishers.filter(p => !p.deleted_at).length;
+						}
+					} catch (e) { console.error('Publishers API error:', e); }
+					document.getElementById('totalPublishers').textContent = totalPublishers;
+
+					// Load users stats
+					let totalUsers = 0;
+					try {
+						const usersRes = await fetch('api/users.php?per_page=10000');
+						if (usersRes.ok) {
+							const usersData = await usersRes.json();
+							const users = Array.isArray(usersData) ? usersData : (usersData.data || []);
+							totalUsers = users.filter(u => !u.deleted_at).length;
+						}
+					} catch (e) { console.error('Users API error:', e); }
+					document.getElementById('totalUsers').textContent = totalUsers;
+
+					// Load rentals stats
+					let totalRentals = 0, activeRentals = 0, overdueRentals = 0, returnedRentals = 0;
+					try {
+						const rentalsRes = await fetch('api/rentals.php?per_page=10000');
+						if (rentalsRes.ok) {
+							const rentalsData = await rentalsRes.json();
+							const rentals = Array.isArray(rentalsData) ? rentalsData : (rentalsData.data || []);
+							const filteredRentals = rentals.filter(r => !r.deleted_at);
+							totalRentals = filteredRentals.length;
+							activeRentals = filteredRentals.filter(r => r.status === 'active').length;
+							overdueRentals = filteredRentals.filter(r => r.status === 'overdue').length;
+							returnedRentals = filteredRentals.filter(r => r.status === 'returned').length;
+						}
+					} catch (e) { console.error('Rentals API error:', e); }
+
+					document.getElementById('totalRentals').textContent = totalRentals;
+					document.getElementById('activeRentals').textContent = activeRentals;
+					document.getElementById('overdueRentals').textContent = overdueRentals;
+					document.getElementById('returnedRentals').textContent = returnedRentals;
+
+					// Update totals for each status
+					document.getElementById('totalRentalsForActive').textContent = totalRentals;
+					document.getElementById('totalRentalsForOverdue').textContent = totalRentals;
+					document.getElementById('totalRentalsForReturned').textContent = totalRentals;
+
+					// Update progress bars
+					if (totalRentals > 0) {
+						document.getElementById('activeProgress').style.width = `${(activeRentals / totalRentals) * 100}%`;
+						document.getElementById('overdueProgress').style.width = `${(overdueRentals / totalRentals) * 100}%`;
+						document.getElementById('returnedProgress').style.width = `${(returnedRentals / totalRentals) * 100}%`;
+					} else {
+						document.getElementById('activeProgress').style.width = '0%';
+						document.getElementById('overdueProgress').style.width = '0%';
+						document.getElementById('returnedProgress').style.width = '0%';
+					}
+
+					// Show overdue alert if there are overdue rentals
+					const overdueAlert = document.getElementById('overdueAlert');
+					if (overdueRentals > 0) {
+						document.getElementById('overdueCount').textContent = overdueRentals;
+						overdueAlert.classList.remove('d-none');
+					} else {
+						overdueAlert.classList.add('d-none');
+					}
+
+				} catch (error) {
+					console.error('Error loading stats:', error);
+				}
+			};
+
+			// Load Recent Activities
+			const loadActivities = async () => {
+				const activitiesList = document.getElementById('activitiesList');
+				
+				try {
+					// Fetch recent rentals as activities
+					const rentalsRes = await fetch('api/rentals.php?per_page=50');
+					if (!rentalsRes.ok) throw new Error('Failed to fetch rentals');
+					
+					const rentalsData = await rentalsRes.json();
+					const rentals = Array.isArray(rentalsData) ? rentalsData : (rentalsData.data || []);
+					const filteredRentals = rentals.filter(r => !r.deleted_at);
+
+					if (filteredRentals.length === 0) {
+						activitiesList.innerHTML = '<div class="text-center text-muted py-4">Chưa có hoạt động nào.</div>';
+						return;
+					}
+
+					// Create activity items from rentals
+					const activities = [];
+
+					filteredRentals.forEach(rental => {
+						// Add rental creation activity
+						if (rental.rental_date) {
+							activities.push({
+								type: 'rental_created',
+								date: rental.rental_date,
+								rental: rental
+							});
+						}
+
+						// Add return activity if returned
+						if (rental.status === 'returned' && rental.return_date) {
+							activities.push({
+								type: 'rental_returned',
+								date: rental.return_date,
+								rental: rental
+							});
+						}
+
+						// Add overdue activity
+						if (rental.status === 'overdue') {
+							activities.push({
+								type: 'rental_overdue',
+								date: rental.due_date,
+								rental: rental
+							});
+						}
+					});
+
+					// Sort by date descending
+					activities.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+					// Take only recent 15 activities
+					const recentActivities = activities.slice(0, 15);
+
+					if (recentActivities.length === 0) {
+						activitiesList.innerHTML = '<div class="text-center text-muted py-4">Chưa có hoạt động nào.</div>';
+						return;
+					}
+
+					const getActivityIcon = (type) => {
+						switch (type) {
+							case 'rental_created':
+								return { bg: 'bg-success', color: 'success', icon: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/></svg>' };
+							case 'rental_returned':
+								return { bg: 'bg-secondary', color: 'secondary', icon: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M10.854 8.146a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 0 1 .708-.708L7.5 10.793l2.646-2.647a.5.5 0 0 1 .708 0z"/><path d="M8 1a2.5 2.5 0 0 1 2.5 2.5V4h-5v-.5A2.5 2.5 0 0 1 8 1zm3.5 3v-.5a3.5 3.5 0 1 0-7 0V4H1v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V4h-3.5zM2 5h12v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5z"/></svg>' };
+							case 'rental_overdue':
+								return { bg: 'bg-danger', color: 'danger', icon: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/></svg>' };
+							default:
+								return { bg: 'bg-primary', color: 'primary', icon: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 16A8 0 1 0 8 0a8 8 0 0 0 0 16z"/></svg>' };
+						}
+					};
+
+					const getActivityText = (activity) => {
+						const userName = escapeHtml(activity.rental.user_name || 'Không xác định');
+						const bookTitles = escapeHtml(activity.rental.book_titles || 'Không xác định');
+						
+						switch (activity.type) {
+							case 'rental_created':
+								return `<strong>${userName}</strong> đã thuê sách <em>${bookTitles}</em>`;
+							case 'rental_returned':
+								return `<strong>${userName}</strong> đã trả sách <em>${bookTitles}</em>`;
+							case 'rental_overdue':
+								return `Đơn thuê của <strong>${userName}</strong> đã quá hạn (<em>${bookTitles}</em>)`;
+							default:
+								return 'Hoạt động không xác định';
+						}
+					};
+
+					activitiesList.innerHTML = recentActivities.map(activity => {
+						const iconData = getActivityIcon(activity.type);
+						return `
+							<div class="activity-item d-flex align-items-start">
+								<div class="activity-icon ${iconData.bg} bg-opacity-10 text-${iconData.color} me-3">
+									${iconData.icon}
+								</div>
+								<div class="flex-grow-1">
+									<div class="small">${getActivityText(activity)}</div>
+									<div class="activity-time">${formatTimeAgo(activity.date)}</div>
+								</div>
+							</div>
+						`;
+					}).join('');
+
+				} catch (error) {
+					console.error('Error loading activities:', error);
+					activitiesList.innerHTML = '<div class="text-center text-danger py-4">Lỗi tải dữ liệu hoạt động.</div>';
+				}
+			};
+
+			// Refresh button
+			document.getElementById('refreshActivities').addEventListener('click', () => {
+				const activitiesList = document.getElementById('activitiesList');
+				activitiesList.innerHTML = '<div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm me-2"></div>Đang tải...</div>';
+				loadStats();
+				loadActivities();
+			});
+
+			// Initial load
+			loadStats();
+			loadActivities();
+
+			// Auto refresh every 30 seconds
+			setInterval(() => {
+				loadStats();
+				loadActivities();
+			}, 30000);
+		})();
+	</script>
+</body>
+</html>

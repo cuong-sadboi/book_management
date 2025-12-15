@@ -1,6 +1,6 @@
 (() => {
 	const API = 'api/rentals.php';
-	const tbody = document.getElementById('rentalTbody');
+	const tbody = document.getElementById('rentalTbody') || document.getElementById('rentalTableBody');
 	const pagination = document.getElementById('rentalPagination');
 	const searchInput = document.getElementById('rentalSearch');
 	const statusFilter = document.getElementById('statusFilter');
@@ -9,8 +9,18 @@
 	const btnAdd = document.getElementById('btnRentalAdd');
 	const btnDeleteSelected = document.getElementById('btnRentalDeleteSelected');
 	const btnExportExcel = document.getElementById('btnRentalExportExcel');
-	const selectAll = document.getElementById('rentalSelectAll');
+	const selectAll = document.getElementById('rentalSelectAll') || document.getElementById('selectAllCheckbox');
 	const selectedCountEl = document.getElementById('rentalSelectedCount');
+
+	// Check if elements exist
+	if (!tbody) {
+		console.error('Table body not found');
+		return;
+	}
+	if (!btnAdd) {
+		console.error('Create button not found');
+		return;
+	}
 
 	let allRentalIds = [];
 	let selectedIds = new Set();
@@ -55,7 +65,27 @@
 	const formatDate = (dateStr) => {
 		if (!dateStr) return '-';
 		const d = new Date(dateStr);
-		return d.toLocaleString('vi-VN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+		return d.toLocaleString('vi-VN', { 
+			year: 'numeric', 
+			month: '2-digit', 
+			day: '2-digit', 
+			hour: '2-digit', 
+			minute: '2-digit',
+			timeZone: 'Asia/Ho_Chi_Minh'
+		});
+	};
+
+	// Helper function to get current datetime in Vietnam timezone
+	const getVietnamDateTime = () => {
+		const now = new Date();
+		const vnTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
+		const year = vnTime.getFullYear();
+		const month = String(vnTime.getMonth() + 1).padStart(2, '0');
+		const day = String(vnTime.getDate()).padStart(2, '0');
+		const hours = String(vnTime.getHours()).padStart(2, '0');
+		const minutes = String(vnTime.getMinutes()).padStart(2, '0');
+		const seconds = String(vnTime.getSeconds()).padStart(2, '0');
+		return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 	};
 
 	const getStatusBadge = (status) => {
@@ -132,7 +162,10 @@
 							<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-9.5 9.5a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207zM12.5 5.5 10.207 3.207 4 9.414V11h1.586z"/></svg>
 						</button>` : ''}
 						<button class="btn-delete btn btn-sm btn-outline-danger d-inline-flex align-items-center justify-content-center" data-id="${r.id ?? ''}" title="Delete" aria-label="Delete">
-							<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z"/></svg>
+							<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+								<path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z"/>
+								<path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z"/>
+							</svg>
 						</button>
 					</div>
 				</td>
@@ -145,11 +178,15 @@
 		pagination.innerHTML = '';
 		for (let page = 1; page <= totalPages; page += 1) {
 			const btn = document.createElement('button');
+			btn.className = 'btn btn-outline-primary';
 			btn.textContent = page;
+			btn.type = 'button';
+			
 			if (page === state.page) {
 				btn.disabled = true;
 				btn.classList.add('active');
 			}
+			
 			btn.addEventListener('click', () => {
 				if (page === state.page) return;
 				state.page = page;
@@ -159,7 +196,7 @@
 		}
 	}
 
-	perPageSelect?.addEventListener('change', () => {
+	perPageSelect.addEventListener('change', () => {
 		state.limit = Number(perPageSelect.value) || 10;
 		state.page = 1;
 		loadRentals();
@@ -177,7 +214,7 @@
 		}, 300);
 	});
 
-	statusFilter?.addEventListener('change', () => {
+	statusFilter.addEventListener('change', () => {
 		state.status = statusFilter.value;
 		state.page = 1;
 		selectedIds.clear();
@@ -190,14 +227,16 @@
 		state.status = '';
 		state.page = 1;
 		if (statusFilter) statusFilter.value = '';
-		selectedIds.clear(); // Clear selection on refresh
+		selectedIds.clear();
 		loadRentals();
 	});
 
-	selectAll?.addEventListener('change', (event) => {
+	selectAll.addEventListener('change', (event) => {
 		if (event.target.checked) {
+			// Select ALL visible IDs across all pages
 			selectedIds = new Set(allRentalIds);
 		} else {
+			// Deselect all
 			selectedIds.clear();
 		}
 		syncCheckboxes();
@@ -243,7 +282,10 @@
 			.catch((error) => alert(error.message || 'Delete failed.'));
 	});
 
-	btnAdd?.addEventListener('click', () => { window.location.href = 'create-rental.html'; });
+	btnAdd?.addEventListener('click', () => { 
+		console.log('Create button clicked');
+		window.location.href = 'create-rental.html'; 
+	});
 
 	btnExportExcel?.addEventListener('click', () => {
 		if (!selectedIds.size) {
@@ -273,12 +315,14 @@
 			event.stopPropagation();
 			if (!confirm('Confirm return this book?')) return;
 			
+			const returnDateTime = getVietnamDateTime();
 			fetch(API, {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ 
-					id: parseInt(returnBtn.dataset.id), 
-					return_date: new Date().toISOString().slice(0, 19).replace('T', ' ')
+					id: parseInt(returnBtn.dataset.id),
+					status: 'returned',
+					return_date: returnDateTime
 				}),
 			})
 				.then(async (res) => {

@@ -33,9 +33,9 @@
 							<option value="5">5</option><option value="10" selected>10</option><option value="25">25</option>
 						</select>
 					</div>
-					<div class="col d-flex flex-wrap gap-2 benphai">
+					<div class="col d-flex flex-wrap gap-2 justify-content-end">
 						<button id="btnRentalRefresh" class="btn btn-outline-primary">Refresh</button>
-						<button id="btnRentalAdd" class="btn btn-primary">Create Rental</button>
+						<button id="btnRentalAdd" class="btn btn-primary">Create</button>
 						<button id="btnRentalExportExcel" class="btn btn-success">Export Excel</button>
 						<button id="btnRentalDeleteSelected" class="btn btn-danger">Delete Selected</button>
 					</div>
@@ -45,7 +45,7 @@
 					<table class="table table-striped table-hover align-middle mb-3">
 						<thead>
 							<tr>
-								<th><input id="rentalSelectAll" type="checkbox"></th>
+								<th style="width: 40px;"><input type="checkbox" id="selectAllCheckbox"></th>
 								<th>ID</th>
 								<th>User</th>
 								<th>Book</th>
@@ -56,7 +56,11 @@
 								<th>Actions</th>
 							</tr>
 						</thead>
-						<tbody id="rentalTbody"></tbody>
+						<tbody id="rentalTableBody">
+							<tr>
+								<td colspan="9" class="text-center text-muted py-5">Loading data...</td>
+							</tr>
+						</tbody>
 					</table>
 				</div>
 
@@ -72,100 +76,460 @@
 	<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
 	<script src="js/layout.js"></script>
 	<script>
+		// Load includes and execute embedded scripts
 		document.querySelectorAll('[data-include]').forEach((node) => {
 			fetch(node.dataset.include)
 				.then((res) => (res.ok ? res.text() : Promise.reject(res.statusText)))
-				.then((html) => { node.innerHTML = html; window.initLayout?.(); })
+				.then((html) => {
+					node.innerHTML = html;
+					// Execute any scripts in the loaded content
+					node.querySelectorAll('script').forEach((oldScript) => {
+						const newScript = document.createElement('script');
+						if (oldScript.src) {
+							newScript.src = oldScript.src;
+						} else {
+							newScript.textContent = oldScript.textContent;
+						}
+						oldScript.parentNode.replaceChild(newScript, oldScript);
+					});
+					window.initLayout?.();
+				})
 				.catch(() => { node.innerHTML = '<div class="alert alert-warning m-0">Unable to load layout section.</div>'; });
 		});
 	</script>
-	<script src="js/rental.js"></script>
-
-	<!-- Return button handler -->
 	<script>
 		(() => {
-			const tbody = document.getElementById('rentalTbody');
+			const tableBody = document.getElementById('rentalTableBody');
+			const searchInput = document.getElementById('rentalSearch');
+			const statusFilter = document.getElementById('statusFilter');
+			const pageSizeSelect = document.getElementById('rentalPerPage');
 			const refreshBtn = document.getElementById('btnRentalRefresh');
+			const createBtn = document.getElementById('btnRentalAdd');
+			const exportBtn = document.getElementById('btnRentalExportExcel');
+			const deleteBtn = document.getElementById('btnRentalDeleteSelected');
+			const selectAllCheckbox = document.getElementById('selectAllCheckbox');
 
-			// Format datetime for display (same format used elsewhere)
-			const formatDateTimeDisplay = (isoOrDate) => {
-				const d = isoOrDate ? new Date(isoOrDate) : new Date();
-				return d.toLocaleString('vi-VN', {
-					year: 'numeric',
-					month: '2-digit',
-					day: '2-digit',
-					hour: '2-digit',
-					minute: '2-digit'
+			let currentPage = 1;
+			let pageSize = 10;
+			let allRentals = [];
+			let allVisibleRentals = [];
+			let selectedIds = new Set();
+			let bookCache = {};
+			let debounceId;
+			let currentAbortController;
+
+			const escapeHtml = (text) => {
+				if (text === null || text === undefined) return '';
+				const div = document.createElement('div');
+				div.textContent = String(text);
+				return div.innerHTML;
+			};
+
+			const formatDate = (dateStr) => {
+				if (!dateStr) return '-';
+				const d = new Date(dateStr);
+				return d.toLocaleString('vi-VN', { 
+					year: 'numeric', 
+					month: '2-digit', 
+					day: '2-digit', 
+					hour: '2-digit', 
+					minute: '2-digit',
+					timeZone: 'Asia/Ho_Chi_Minh'
 				});
 			};
 
-			// Update row DOM: set return date cell and status badge
-			const updateRowAfterReturn = (row, returnDateStr) => {
-				if (!row) return;
-				const cells = row.querySelectorAll('td');
-				// Return Date column is the 7th column (index 6)
-				if (cells[6]) cells[6].textContent = returnDateStr;
-				// Status column is the 8th column (index 7) — replace content with badge
-				if (cells[7]) {
-					cells[7].innerHTML = '<span class="badge bg-secondary">Returned</span>';
-				}
-				// Optionally disable the Return button in Actions cell
-				const actionCell = cells[8];
-				if (actionCell) {
-					const btn = actionCell.querySelector('.btn-return') || actionCell.querySelector('button[data-action="return"]') || Array.from(actionCell.querySelectorAll('button')).find(b => (b.textContent || '').trim().toLowerCase().startsWith('return'));
-					if (btn) {
-						btn.disabled = true;
-						btn.classList.remove('btn-success');
-						btn.classList.add('btn-secondary');
-						btn.textContent = 'Returned';
-					}
-				}
+			// Helper function to get current datetime in Vietnam timezone
+			const getVietnamDateTime = () => {
+				const now = new Date();
+				const vnTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
+				const year = vnTime.getFullYear();
+				const month = String(vnTime.getMonth() + 1).padStart(2, '0');
+				const day = String(vnTime.getDate()).padStart(2, '0');
+				const hours = String(vnTime.getHours()).padStart(2, '0');
+				const minutes = String(vnTime.getMinutes()).padStart(2, '0');
+				const seconds = String(vnTime.getSeconds()).padStart(2, '0');
+				return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 			};
 
-			// Send PUT to API to mark rental returned
-			const markRentalAsReturned = async (rentalId, row) => {
-				if (!rentalId) return alert('Rental id not found.');
-				if (!confirm('Confirm return ALL books for rental #' + rentalId + '?')) return;
+			const getStatusBadge = (status) => {
+				const badges = {
+					'active': '<span class="badge bg-success">Active</span>',
+					'returned': '<span class="badge bg-secondary">Returned</span>',
+					'overdue': '<span class="badge bg-danger">Overdue</span>'
+				};
+				return badges[status] || escapeHtml(status);
+			};
+
+			const getBookTitle = async (bookId) => {
+				if (bookCache[bookId]) return bookCache[bookId];
 				try {
-					const nowSql = new Date().toISOString().slice(0,19).replace('T',' ');
-					const res = await fetch('api/rentals.php', {
-						method: 'PUT',
-						headers: { 'Content-Type': 'application/json' },
-						body: JSON.stringify({ id: Number(rentalId), status: 'returned', return_date: nowSql })
-					});
-					const data = await res.json().catch(()=>null);
-					if (!res.ok || data?.error) throw new Error(data?.error || 'Failed to mark rental as returned.');
-					// prefer server return_date if available
-					const serverDate = data?.return_date ?? data?.data?.return_date ?? data?.data?.rental?.return_date ?? nowSql;
-					const displayDate = formatDateTimeDisplay(serverDate || nowSql);
-					updateRowAfterReturn(row, displayDate);
-					alert('Rental marked as returned.');
-				} catch (err) {
-					alert(err.message || 'Error returning rental.');
+					const res = await fetch(`api/books.php?id=${encodeURIComponent(bookId)}`);
+					const payload = await res.json().catch(() => null);
+					const book = payload?.data ?? payload ?? null;
+					const title = book?.title || book?.name || 'Unknown';
+					bookCache[bookId] = title;
+					return title;
+				} catch (e) {
+					bookCache[bookId] = 'Unknown';
+					return 'Unknown';
 				}
 			};
 
-			// Delegate clicks in tbody: detect Return buttons by class, data-action or button text
-			if (tbody) {
-				tbody.addEventListener('click', (ev) => {
-					const btn = ev.target.closest('button');
-					if (!btn) return;
-					const isReturn = btn.classList.contains('btn-return') || btn.dataset?.action === 'return' || (btn.textContent || '').trim().toLowerCase().startsWith('return');
-					if (!isReturn) return;
-					// find rental id (from data-id or row)
-					let rentalId = btn.dataset?.id || btn.getAttribute('data-id') || null;
-					const row = btn.closest('tr');
-					if (!rentalId) {
-						// fallback: try to read ID from second cell
-						const idCell = row?.querySelector('td:nth-child(2)');
-						rentalId = idCell ? idCell.textContent.trim() : null;
-					}
-					markRentalAsReturned(rentalId, row);
-				});
-			}
+			const getBookTitlesForRental = (rental) => {
+				if (!Array.isArray(rental.items) || rental.items.length === 0) return 'N/A';
+				return rental.items.map(item => escapeHtml(bookCache[item.book_id] || item.book_title || 'Unknown')).join(', ');
+			};
 
-			// expose for manual use
-			window.markRentalAsReturned = markRentalAsReturned;
+			const loadRentals = async () => {
+				const params = new URLSearchParams({ page: 1, per_page: 1000 });
+				if (searchInput.value.trim()) params.append('q', searchInput.value.trim());
+				if (statusFilter.value) params.append('status', statusFilter.value);
+
+				currentAbortController?.abort();
+				const controller = new AbortController();
+				currentAbortController = controller;
+
+				try {
+					const res = await fetch(`api/rentals.php?${params.toString()}`, { signal: controller.signal });
+					if (!res.ok) throw new Error(`HTTP ${res.status}`);
+					const payload = await res.json().catch(() => null);
+					
+					// Get all rentals and filter out soft-deleted ones
+					allRentals = (Array.isArray(payload) ? payload : payload?.data || []).filter(r => r && r.id && !r.deleted_at);
+					
+					// Pre-fetch book titles
+					const bookIds = new Set();
+					allRentals.forEach(rental => {
+						if (Array.isArray(rental.items)) {
+							rental.items.forEach(item => {
+								if (item.book_id) bookIds.add(item.book_id);
+							});
+						}
+					});
+
+					await Promise.all(Array.from(bookIds).map(id => getBookTitle(id)));
+
+					// Clean up selectedIds - remove any that are no longer visible
+					selectedIds = new Set([...selectedIds].filter((id) => allRentals.some(r => String(r.id) === String(id))));
+
+					// Reset page if it exceeds new total
+					const totalPages = Math.max(1, Math.ceil(allRentals.length / pageSize));
+					if (currentPage > totalPages) {
+						currentPage = totalPages;
+					}
+
+					renderTable();
+				} catch (error) {
+					if (error.name === 'AbortError') return;
+					console.error('Error loading rentals:', error);
+					tableBody.innerHTML = `<tr><td colspan="9" class="alert alert-danger mb-0">Error loading rentals: ${escapeHtml(String(error))}</td></tr>`;
+					document.getElementById('rentalPagination').innerHTML = '';
+					allRentals = [];
+					selectedIds.clear();
+					updateSelectedCount();
+				} finally {
+					if (currentAbortController === controller) currentAbortController = null;
+				}
+			};
+
+			const renderTable = () => {
+				const searchTerm = searchInput.value.toLowerCase();
+				const statusValue = statusFilter.value;
+
+				// Filter based on search and status
+				const filtered = allRentals.filter(rental => {
+					const matchSearch = searchTerm === '' || 
+						(rental.user_name && rental.user_name.toLowerCase().includes(searchTerm)) ||
+						(rental.user_email && rental.user_email.toLowerCase().includes(searchTerm)) ||
+						getBookTitlesForRental(rental).toLowerCase().includes(searchTerm);
+					
+					const matchStatus = statusValue === '' || rental.status === statusValue;
+					
+					return matchSearch && matchStatus;
+				});
+
+				allVisibleRentals = filtered;
+
+				if (filtered.length === 0) {
+					tableBody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-5">No rentals found.</td></tr>';
+					document.getElementById('rentalPagination').innerHTML = '';
+					updateSelectedCount();
+					return;
+				}
+
+				// Pagination logic
+				const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+				if (currentPage > totalPages) currentPage = totalPages;
+				
+				const startIdx = (currentPage - 1) * pageSize;
+				const endIdx = Math.min(startIdx + pageSize, filtered.length);
+				const paginatedRentals = filtered.slice(startIdx, endIdx);
+
+				const html = paginatedRentals.map(rental => {
+					const bookTitles = getBookTitlesForRental(rental);
+					const isReturned = rental.status === 'returned';
+					const isActive = rental.status === 'active';
+					return `
+						<tr style="cursor: pointer;" data-rental-id="${escapeHtml(rental.id)}">
+							<td><input type="checkbox" class="rentalCheckbox" value="${escapeHtml(rental.id)}" data-id="${rental.id}" ${selectedIds.has(String(rental.id)) ? 'checked' : ''}></td>
+							<td>${escapeHtml(rental.id)}</td>
+							<td>
+								<div>${escapeHtml(rental.user_name || '-')}</div>
+								<small class="text-muted">${escapeHtml(rental.user_email || '-')}</small>
+							</td>
+							<td>${bookTitles}</td>
+							<td>${escapeHtml(formatDate(rental.rental_date))}</td>
+							<td>${!rental.due_date ? '-' : new Date(rental.due_date).toLocaleDateString('vi-VN')}</td>
+							<td>${escapeHtml(formatDate(rental.return_date))}</td>
+							<td>${getStatusBadge(rental.status)}</td>
+							<td>
+								<div class="d-flex flex-column gap-1">
+									${isActive ? `
+										<button class="btn-return btn btn-sm btn-outline-success d-inline-flex align-items-center justify-content-center" data-id="${rental.id ?? ''}" title="Return" aria-label="Return">
+											Return
+										</button>
+									` : ''}
+									${!isReturned ? `
+										<a href="update-rental.html?id=${encodeURIComponent(rental.id)}" class="btn-edit btn btn-sm btn-outline-primary d-inline-flex align-items-center justify-content-center" data-id="${rental.id ?? ''}" title="Edit" aria-label="Edit">
+											<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-9.5 9.5a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207zM12.5 5.5 10.207 3.207 4 9.414V11h1.586z"/></svg>
+										</a>
+									` : ''}
+
+									<button class="btn-delete btn btn-sm btn-outline-danger d-inline-flex align-items-center justify-content-center" data-id="${rental.id ?? ''}" title="Delete" aria-label="Delete">
+																	<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z"/></svg>
+
+											</button>
+								</div>
+							</td>
+						</tr>
+					`;
+				}).join('');
+
+				tableBody.innerHTML = html;
+
+				// Re-attach checkbox listeners
+				document.querySelectorAll('.rentalCheckbox').forEach(checkbox => {
+					checkbox.addEventListener('change', (e) => {
+						const id = String(e.target.dataset.id);
+						if (e.target.checked) {
+							selectedIds.add(id);
+						} else {
+							selectedIds.delete(id);
+						}
+						updateSelectAllState();
+					});
+				});
+
+				// Add click handler to rows for navigation
+				document.querySelectorAll('tr[data-rental-id]').forEach(row => {
+					row.addEventListener('click', (e) => {
+						if (e.target.tagName === 'INPUT' || e.target.closest('button') || e.target.closest('a')) return;
+						const rentalId = row.dataset.rentalId;
+						window.location.href = `details-rental.html?id=${encodeURIComponent(rentalId)}`;
+					});
+				});
+
+				// Add return button listeners
+				document.querySelectorAll('.btn-return').forEach(btn => {
+					btn.addEventListener('click', async (e) => {
+						e.stopPropagation();
+						const rentalId = btn.dataset.id;
+						if (confirm('Mark this rental as returned?')) {
+							try {
+								btn.disabled = true;
+								const returnDateTime = getVietnamDateTime();
+								const res = await fetch('api/rentals.php', {
+									method: 'PUT',
+									headers: { 'Content-Type': 'application/json' },
+									body: JSON.stringify({ 
+										id: parseInt(rentalId),
+										status: 'returned',
+										return_date: returnDateTime
+									})
+								});
+								const data = await res.json();
+								if (!res.ok || data?.error) throw new Error(data?.error || 'Failed to return rental');
+								
+								// Reload data from server to get accurate return_date
+								await loadRentals();
+							} catch (err) {
+								alert(err.message || 'Unable to return rental');
+								btn.disabled = false;
+							}
+						}
+					});
+				});
+
+				// Add delete button listeners
+				document.querySelectorAll('.btn-delete').forEach(btn => {
+					btn.addEventListener('click', async (e) => {
+						e.stopPropagation();
+						const rentalId = btn.dataset.id;
+						if (confirm('Are you sure you want to delete this rental?')) {
+							try {
+								btn.disabled = true;
+								const res = await fetch('api/rentals.php', {
+									method: 'DELETE',
+									headers: { 'Content-Type': 'application/json' },
+									body: JSON.stringify({ id: rentalId })
+								});
+								const data = await res.json();
+								if (!res.ok || data?.error) throw new Error(data?.error || 'Failed to delete rental');
+								
+								// Remove from local list
+								allRentals = allRentals.filter(r => r.id !== parseInt(rentalId));
+								renderTable();
+							} catch (err) {
+								alert(err.message || 'Unable to delete rental');
+								btn.disabled = false;
+							}
+						}
+					});
+				});
+
+				updateSelectAllState();
+				updatePagination(filtered.length);
+			};
+
+			const updateSelectAllState = () => {
+				const checkboxes = document.querySelectorAll('.rentalCheckbox');
+				const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+				selectAllCheckbox.checked = allChecked;
+				updateSelectedCount();
+			};
+
+			const updateSelectedCount = () => {
+				const total = allVisibleRentals.length;
+				document.getElementById('rentalSelectedCount').textContent = `Selected: ${selectedIds.size} / ${total}`;
+			};
+
+			const updatePagination = (totalItems) => {
+				const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+				const paginationEl = document.getElementById('rentalPagination');
+				paginationEl.innerHTML = '';
+
+				if (totalPages <= 1) return;
+
+				for (let page = 1; page <= totalPages; page += 1) {
+					const btn = document.createElement('button');
+					//btn.className = 'btn btn-outline-primary';
+					btn.textContent = page;
+					btn.type = 'button';
+					
+					if (page === currentPage) {
+						btn.disabled = true;
+						btn.classList.add('active');
+					}
+					
+					btn.addEventListener('click', () => {
+						if (page === currentPage) return;
+						currentPage = page;
+						renderTable();
+					});
+					paginationEl.appendChild(btn);
+				}
+			};
+
+			selectAllCheckbox.addEventListener('change', (e) => {
+				if (e.target.checked) {
+					// Select ALL visible rentals across all pages
+					allVisibleRentals.forEach(rental => {
+						selectedIds.add(String(rental.id));
+					});
+				} else {
+					// Deselect all
+					selectedIds.clear();
+				}
+				document.querySelectorAll('.rentalCheckbox').forEach(checkbox => {
+					checkbox.checked = e.target.checked;
+				});
+				updateSelectedCount();
+			});
+
+			searchInput.addEventListener('input', () => {
+				currentPage = 1;
+				clearTimeout(debounceId);
+				debounceId = setTimeout(() => {
+					selectedIds.clear();
+					loadRentals();
+				}, 300);
+			});
+
+			statusFilter.addEventListener('change', () => {
+				currentPage = 1;
+				selectedIds.clear();
+				loadRentals();
+			});
+
+			pageSizeSelect.addEventListener('change', (e) => {
+				pageSize = parseInt(e.target.value);
+				currentPage = 1;
+				renderTable();
+			});
+
+			refreshBtn.addEventListener('click', () => {
+				searchInput.value = '';
+				statusFilter.value = '';
+				currentPage = 1;
+				selectedIds.clear();
+				loadRentals();
+			});
+
+			// Add Create button listener
+			createBtn.addEventListener('click', () => {
+				window.location.href = 'create-rental.html';
+			});
+
+			exportBtn.addEventListener('click', () => {
+				if (!selectedIds.size) {
+					alert('Please select at least one rental to export.');
+					return;
+				}
+
+				const form = document.createElement('form');
+				form.method = 'POST';
+				form.action = 'api/rentals/export.php';
+				form.style.display = 'none';
+
+				const input = document.createElement('input');
+				input.type = 'hidden';
+				input.name = 'ids';
+				input.value = JSON.stringify(Array.from(selectedIds));
+				form.appendChild(input);
+
+				document.body.appendChild(form);
+				form.submit();
+				document.body.removeChild(form);
+			});
+
+			deleteBtn.addEventListener('click', () => {
+				const selected = Array.from(selectedIds);
+				if (selected.length === 0) {
+					alert('Please select at least one rental to delete');
+					return;
+				}
+				if (!confirm(`Delete ${selected.length} rental(s)?`)) return;
+
+				fetch('api/rentals.php', {
+					method: 'DELETE',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ ids: selected })
+				})
+					.then(async (res) => {
+						const raw = await res.text();
+						let data = null;
+						try { data = raw ? JSON.parse(raw) : null; } catch {}
+						return { ok: res.ok, data, raw };
+					})
+					.then(({ ok, data, raw }) => {
+						if (!ok || data?.error) throw new Error(data?.error || raw || 'Unable to delete.');
+						selectedIds.clear();
+						loadRentals();
+					})
+					.catch((error) => alert(error.message || 'Delete failed.'));
+			});
+
+			loadRentals();
 		})();
 	</script>
 </body>
