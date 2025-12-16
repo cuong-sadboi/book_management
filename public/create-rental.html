@@ -36,7 +36,7 @@
 			transition: all 0.2s;
 		}
 		#bookSearchModal .book-search-item:hover {
-			background-color: #f8f9fa;
+			background-color: #e7f3ff;
 			border-color: #0d6efd;
 		}
 		#bookSearchModal .book-search-item img {
@@ -96,6 +96,14 @@
 			border-radius: 0.375rem;
 			padding: 1rem;
 		}
+		.books-empty-state {
+			text-align: center;
+			padding: 2rem;
+			background-color: #f8f9fa;
+			border: 2px dashed #dee2e6;
+			border-radius: 0.5rem;
+			color: #6c757d;
+		}
 	</style>
 </head>
 <body class="bg-light d-flex flex-column min-vh-100">
@@ -130,10 +138,7 @@
 										<small class="text-muted" id="selectedUserEmail"></small>
 									</div>
 									<button type="button" class="btn btn-sm btn-outline-danger" id="clearUserBtn">
-										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
-											<path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
-										</svg>
-										Change
+										<i class="bi bi-x-lg"></i> Change
 									</button>
 								</div>
 							</div>
@@ -143,10 +148,7 @@
 								<div class="new-user-form">
 									<div class="d-flex justify-content-between align-items-center mb-3">
 										<h6 class="mb-0">
-											<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="me-2" viewBox="0 0 16 16">
-												<path d="M1 14s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1H1zm5-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
-												<path fill-rule="evenodd" d="M13.5 5a.5.5 0 0 1 .5.5V7h1.5a.5.5 0 0 1 0 1H14v1.5a.5.5 0 0 1-1 0V8h-1.5a.5.5 0 0 1 0-1H13V5.5a.5.5 0 0 1 .5-.5z"/>
-											</svg>
+											<i class="bi bi-person-plus me-2"></i>
 											Create New User
 										</h6>
 										<button type="button" class="btn btn-sm btn-outline-secondary" id="cancelNewUserBtn">Cancel</button>
@@ -157,16 +159,24 @@
 											<input type="text" id="newUserName" class="form-control" placeholder="Enter name">
 										</div>
 										<div class="col-md-6">
+											<label class="form-label required">Username</label>
+											<input type="text" id="newUserUsername" class="form-control" placeholder="Enter username">
+										</div>
+										<div class="col-md-6">
 											<label class="form-label required">Email</label>
 											<input type="email" id="newUserEmail" class="form-control" placeholder="Enter email">
 										</div>
 										<div class="col-md-6">
-											<label class="form-label">Phone</label>
-											<input type="text" id="newUserPhone" class="form-control" placeholder="Enter phone (optional)">
+											<label class="form-label">Age</label>
+											<input type="number" id="newUserAge" class="form-control" placeholder="Enter age" min="1" max="150">
 										</div>
 										<div class="col-md-6">
-											<label class="form-label">Username</label>
-											<input type="text" id="newUserUsername" class="form-control" placeholder="Enter username (optional)">
+											<label class="form-label">Location</label>
+											<input type="text" id="newUserLocation" class="form-control" placeholder="e.g., Hanoi, Vietnam">
+										</div>
+										<div class="col-md-6">
+											<label class="form-label">Note</label>
+											<input type="text" id="newUserNote" class="form-control" placeholder="Short note...">
 										</div>
 									</div>
 								</div>
@@ -184,25 +194,18 @@
 								<textarea id="notes" rows="2" class="form-control" placeholder="Optional notes..."></textarea>
 							</div>
 
-							<!-- Books Section -->
+							<!-- Books Section - New Design -->
 							<div class="col-12">
-								<label class="form-label required">Books</label>
-								<div id="bookItemsContainer">
-									<div class="book-item row g-2 align-items-end mb-2">
-										<div class="col-md-6">
-											<select name="book_id[]" class="form-select book-select" required>
-												<option value="">-- Select Book --</option>
-											</select>
-										</div>
-										<div class="col-md-3">
-											<input type="number" name="quantity[]" class="form-control" value="1" min="1" placeholder="Qty">
-										</div>
-										<div class="col-md-3">
-											<button type="button" class="btn btn-danger btn-remove-book" disabled>Remove</button>
-										</div>
+								<div class="d-flex justify-content-between align-items-center mb-3">
+									<label class="form-label required mb-0">Book Information</label>
+									<button type="button" id="btnAddBook" class="btn btn-outline-primary">Add Book</button>
+								</div>
+								<div id="selectedBooksContainer">
+									<div class="books-empty-state" id="booksEmptyState">
+										<i class="bi bi-book fs-1 d-block mb-2"></i>
+										<p class="mb-0">No books selected. Click "Add Book" to select books for this rental.</p>
 									</div>
 								</div>
-								<button type="button" id="btnAddBook" class="btn btn-outline-secondary mt-2">+ Add Book</button>
 							</div>
 
 							<div class="col-12 d-flex justify-content-end gap-2 pt-3">
@@ -219,7 +222,7 @@
 
 	<!-- Book Search Modal -->
 	<div class="modal fade" id="bookSearchModal" tabindex="-1">
-		<div class="modal-dialog modal-lg">
+		<div class="modal-dialog modal-lg modal-dialog-scrollable">
 			<div class="modal-content">
 				<div class="modal-header">
 					<h5 class="modal-title">Select Book</h5>
@@ -231,7 +234,7 @@
 					</div>
 					<div id="bookSearchResults" style="max-height: 400px; overflow-y: auto;">
 						<div class="text-center text-muted py-3">
-							<p>Type to search for books...</p>
+							<p>Loading books...</p>
 						</div>
 					</div>
 				</div>
@@ -249,23 +252,44 @@
 					.then((html) => { node.innerHTML = html; window.initLayout?.(); })
 					.catch(() => { node.innerHTML = '<div class="alert alert-warning m-0">Unable to load layout section.</div>'; });
 			});
-
-			// Get hidden book IDs from localStorage
-			const BOOK_HIDDEN_KEY = 'book_hidden_ids';
-			const getHiddenBookIds = () => {
-				try {
-					return new Set(JSON.parse(localStorage.getItem(BOOK_HIDDEN_KEY) || '[]').map(String));
-				} catch {
-					return new Set();
-				}
-			};
-
-			const booksList = document.getElementById('booksList');
-			let rentalBooks = [];
-			let allBooks = [];
+		})();
+	</script>
+	<script>
+		(() => {
+			const form = document.getElementById('rentalForm');
+			const btnAddBook = document.getElementById('btnAddBook');
+			const selectedBooksContainer = document.getElementById('selectedBooksContainer');
+			const booksEmptyState = document.getElementById('booksEmptyState');
 			const bookSearchModal = new bootstrap.Modal(document.getElementById('bookSearchModal'));
+			const bookSearchInput = document.getElementById('bookSearchInput');
+			const bookSearchResults = document.getElementById('bookSearchResults');
+			
+			// User search elements
+			const userSearchInput = document.getElementById('userSearchInput');
+			const userSearchResults = document.getElementById('userSearchResults');
+			const userIdInput = document.getElementById('userId');
+			const selectedUserContainer = document.getElementById('selectedUserContainer');
+			const selectedUserName = document.getElementById('selectedUserName');
+			const selectedUserEmail = document.getElementById('selectedUserEmail');
+			const clearUserBtn = document.getElementById('clearUserBtn');
+			
+			// New user form elements
+			const newUserContainer = document.getElementById('newUserContainer');
+			const newUserName = document.getElementById('newUserName');
+			const newUserUsername = document.getElementById('newUserUsername');
+			const newUserEmail = document.getElementById('newUserEmail');
+			const newUserAge = document.getElementById('newUserAge');
+			const newUserLocation = document.getElementById('newUserLocation');
+			const newUserNote = document.getElementById('newUserNote');
+			const cancelNewUserBtn = document.getElementById('cancelNewUserBtn');
 
-			// Escape HTML
+			const MAX_BOOKS = 5;
+			let allBooks = [];
+			let allUsers = [];
+			let selectedBooks = []; // Array of selected book objects with quantity
+			let searchDebounce;
+			let isCreatingNewUser = false;
+
 			const escapeHtml = (text) => {
 				if (!text) return '';
 				const div = document.createElement('div');
@@ -273,7 +297,7 @@
 				return div.innerHTML;
 			};
 
-			// Resolve cover image URL with sensible fallbacks
+			// Cover image helper - same as update-rental
 			const getCoverCandidates = (cover) => {
 				const placeholder = 'https://via.placeholder.com/80x110?text=No+Cover';
 				const p = window.location.pathname;
@@ -316,55 +340,7 @@
 				return Array.from(new Set(c.filter(Boolean)));
 			};
 
-			// Try candidates by loading each into temporary Image
-			const tryCandidatesForImage = (img, list = [], timeoutMs = 2500) => {
-				if (!Array.isArray(list) || !list.length) {
-					img.src = 'https://via.placeholder.com/80x110?text=No+Cover';
-					return;
-				}
-				let idx = 0;
-				const next = () => {
-					if (idx >= list.length) {
-						img.src = 'https://via.placeholder.com/80x110?text=No+Cover';
-						return;
-					}
-					const candidate = list[idx++];
-					console.debug('[tryCandidates]', idx - 1, candidate);
-					if (candidate === 'https://via.placeholder.com/80x110?text=No+Cover') {
-						img.src = candidate;
-						return;
-					}
-					const tester = new Image();
-					let finished = false;
-					const timer = setTimeout(() => {
-						if (!finished) {
-							finished = true;
-							next();
-						}
-					}, timeoutMs);
-					tester.onload = () => {
-						if (!finished) {
-							finished = true;
-							clearTimeout(timer);
-							img.src = candidate;
-							img.dataset.srcIdx = idx - 1;
-							console.debug('[tryCandidates] loaded', candidate);
-						}
-					};
-					tester.onerror = () => {
-						if (!finished) {
-							finished = true;
-							clearTimeout(timer);
-							next();
-						}
-					};
-					tester.src = candidate;
-				};
-				img.src = 'https://via.placeholder.com/80x110?text=No+Cover';
-				next();
-			};
-
-			// onerror handler to try next candidate
+			// Image fallback handler
 			window.imgFallback = function(img) {
 				try {
 					const list = (img.dataset.srcs || '').split('||').filter(Boolean);
@@ -381,441 +357,15 @@
 				}
 			};
 
-			// initialize imgs with data-srcs by testing candidates
+			// Initialize images
 			const initImages = (root = document) => {
 				(root.querySelectorAll ? root.querySelectorAll('img[data-srcs]') : []).forEach(img => {
 					const list = (img.dataset.srcs || '').split('||').filter(Boolean);
 					if (!list.length) return;
-					img.dataset.srcIdx = img.dataset.srcIdx || '0';
-					tryCandidatesForImage(img, list);
+					img.dataset.srcIdx = '0';
+					img.src = list[0];
 					if (!img.onerror) img.onerror = function(){ window.imgFallback(this); };
-					console.debug('initImages candidates:', img, list);
 				});
-			};
-
-			// Render books list
-			const renderBooksList = () => {
-				if (rentalBooks.length === 0) {
-					booksList.innerHTML = '<div class="alert alert-info mb-0">No book selected. Click "Add Book" to select books for this rental.</div>';
-					return;
-				}
-
-				booksList.innerHTML = rentalBooks.map(book => {
-					const coverCandidates = getCoverCandidates(book.cover_image);
-					const dataSrcs = coverCandidates.map(u => encodeURI(String(u))).join('||');
-					return `
-						<div class="book-item" data-book-id="${book.id}">
-							<button type="button" class="btn btn-sm btn-danger btn-remove" onclick="removeBook(${book.id})">
-								<i class="bi bi-trash"></i> Remove
-							</button>
-							<div class="row align-items-start">
-								<div class="col-auto">
-									<img src="https://via.placeholder.com/80x110?text=No+Cover" 
-										 width="80" height="110" loading="lazy" decoding="async"
-										 data-srcs="${escapeHtml(dataSrcs)}" 
-										 data-src-idx="0"
-										 onerror="window.imgFallback(this)" 
-										 alt="${escapeHtml(book.title || '')}" 
-										 class="book-cover-small" 
-										 style="border: 1px solid #dee2e6;">
-								</div>
-								<div class="col">
-									<h6 class="mb-1">${escapeHtml(book.title || 'N/A')}</h6>
-									<div class="small text-muted">
-										<div><strong>ISBN:</strong> ${escapeHtml(book.isbn || 'N/A')}</div>
-										<div><strong>Author:</strong> ${escapeHtml(book.author || 'N/A')}</div>
-										<div><strong>Publisher:</strong> ${escapeHtml(book.publisher || 'N/A')}</div>
-										<div><strong>Stock:</strong> ${book.stock || 0}</div>
-									</div>
-								</div>
-							</div>
-						</div>
-					`;
-				}).join('');
-				initImages(booksList);
-			};
-
-			// Add book to rental
-			window.addBookToRental = (bookId) => {
-				const book = allBooks.find(b => b.id === bookId);
-				if (!book) return;
-				
-				// Check if book already added
-				if (rentalBooks.some(b => b.id === bookId)) {
-					alert('This book is already selected for the rental.');
-					return;
-				}
-
-				// Check if book is available for rental
-				if (Number(book.is_rental) !== 1) {
-					alert('This book is not available for rental.');
-					return;
-				}
-
-				if (Number(book.stock) <= 0) {
-					alert('This book is out of stock.');
-					return;
-				}
-
-				rentalBooks.push(book);
-				renderBooksList();
-				bookSearchModal.hide();
-				updateAddBookButton();
-			};
-
-			// Remove book from list
-			window.removeBook = (bookId) => {
-				if (confirm('Are you sure you want to remove this book from the rental?')) {
-					rentalBooks = rentalBooks.filter(b => b.id !== bookId);
-					renderBooksList();
-					updateAddBookButton();
-				}
-			};
-
-			// Get available rental books (filtered)
-			const getAvailableRentalBooks = () => {
-				const hiddenIds = getHiddenBookIds();
-				return allBooks.filter(book => {
-					const isRental = Number(book.is_rental) === 1;
-					const hasStock = Number(book.stock) > 0;
-					const notHidden = !hiddenIds.has(String(book.id));
-					return isRental && hasStock && notHidden;
-				});
-			};
-
-			// Render books in search modal
-			const renderBookSearchResults = (books) => {
-				if (books.length === 0) {
-					bookSearchResults.innerHTML = '<div class="text-center text-muted py-3"><p>No books found.</p></div>';
-					return;
-				}
-
-				bookSearchResults.innerHTML = books.map(book => {
-					const coverCandidates = getCoverCandidates(book.cover_image);
-					const dataSrcs = coverCandidates.map(u => encodeURI(String(u))).join('||');
-					return `
-						<div class="book-search-item d-flex align-items-center" onclick="addBookToRental(${book.id})">
-							<img src="https://via.placeholder.com/50x70?text=No+Cover" 
-								 width="50" height="70" loading="lazy" decoding="async"
-								 data-srcs="${escapeHtml(dataSrcs)}" 
-								 data-src-idx="0"
-								 onerror="window.imgFallback(this)" 
-								 alt="${escapeHtml(book.title || '')}" 
-								 class="me-3" 
-								 style="width:50px;height:70px;object-fit:cover;border-radius:4px;">
-							<div class="flex-grow-1">
-								<h6 class="mb-1">${escapeHtml(book.title || 'Unknown')}</h6>
-								<div class="small text-muted">
-									${escapeHtml(book.author || 'Unknown Author')} • ${escapeHtml(book.isbn || 'No ISBN')} • Stock: ${book.stock || 0}
-								</div>
-							</div>
-						</div>
-					`;
-				}).join('');
-				initImages(bookSearchResults);
-			};
-
-			// Book search functionality
-			const bookSearchInput = document.getElementById('bookSearchInput');
-			const bookSearchResults = document.getElementById('bookSearchResults');
-			const hiddenIds = getHiddenBookIds();
-
-			bookSearchInput.addEventListener('input', (e) => {
-				const query = e.target.value.toLowerCase().trim();
-				const availableBooks = getAvailableRentalBooks();
-				
-				let filtered;
-				if (query.length === 0) {
-					// Show all available books when query is empty
-					filtered = availableBooks;
-				} else {
-					filtered = availableBooks.filter(book => {
-						return (book.title?.toLowerCase().includes(query) ||
-								book.author?.toLowerCase().includes(query) ||
-								book.isbn?.toLowerCase().includes(query));
-					});
-				}
-
-				renderBookSearchResults(filtered);
-			});
-
-			// Show add book modal
-			document.getElementById('addBookBtn').addEventListener('click', () => {
-				bookSearchInput.value = '';
-				// Show all available books when modal opens
-				if (allBooks.length > 0) {
-					const availableBooks = getAvailableRentalBooks();
-					renderBookSearchResults(availableBooks);
-				} else {
-					bookSearchResults.innerHTML = '<div class="text-center text-muted py-3"><p>Loading books...</p></div>';
-					// Try to load books if not loaded yet
-					fetch('api/db.php?limit=1000')
-						.then(res => res.json())
-						.then(data => {
-							if (data.success && data.data) {
-								allBooks = data.data;
-								const availableBooks = getAvailableRentalBooks();
-								renderBookSearchResults(availableBooks);
-							} else {
-								bookSearchResults.innerHTML = '<div class="text-center text-muted py-3"><p>No books available.</p></div>';
-							}
-						})
-						.catch(() => {
-							bookSearchResults.innerHTML = '<div class="text-center text-muted py-3"><p>Error loading books.</p></div>';
-						});
-				}
-				bookSearchModal.show();
-			});
-
-			// Load users
-			fetch('api/users.php?per_page=1000')
-				.then(res => res.json())
-				.then(data => {
-					const select = document.getElementById('user_id');
-					(data.data || []).forEach(u => {
-						const opt = document.createElement('option');
-						opt.value = u.id;
-						opt.textContent = `${u.name} (${u.email})`;
-						select.appendChild(opt);
-					});
-				})
-				.catch(err => {
-					console.error('Error loading users:', err);
-				});
-
-			// Load all books for search
-			fetch('api/db.php?limit=1000')
-				.then(res => res.json())
-				.then(data => {
-					if (data.success && data.data) {
-						allBooks = data.data;
-					}
-				})
-				.catch(err => {
-					console.error('Error loading books:', err);
-				});
-
-			// Helper function to get current datetime in Vietnam timezone for datetime-local input
-			const getVietnamDateTimeLocal = (addDays = 0) => {
-				const now = new Date();
-				// Convert to Vietnam timezone string then parse back
-				const vnOptions = { 
-					timeZone: 'Asia/Ho_Chi_Minh', 
-					year: 'numeric', 
-					month: '2-digit', 
-					day: '2-digit', 
-					hour: '2-digit', 
-					minute: '2-digit',
-					hour12: false 
-				};
-				const parts = new Intl.DateTimeFormat('en-CA', vnOptions).formatToParts(now);
-				
-				let year = '', month = '', day = '', hour = '', minute = '';
-				parts.forEach(p => {
-					if (p.type === 'year') year = p.value;
-					if (p.type === 'month') month = p.value;
-					if (p.type === 'day') day = p.value;
-					if (p.type === 'hour') hour = p.value;
-					if (p.type === 'minute') minute = p.value;
-				});
-				
-				// Create date in Vietnam timezone
-				let vnDate = new Date(`${year}-${month}-${day}T${hour}:${minute}:00`);
-				
-				// Add days if needed
-				if (addDays > 0) {
-					vnDate.setDate(vnDate.getDate() + addDays);
-				}
-				
-				const y = vnDate.getFullYear();
-				const m = String(vnDate.getMonth() + 1).padStart(2, '0');
-				const d = String(vnDate.getDate()).padStart(2, '0');
-				const h = String(vnDate.getHours()).padStart(2, '0');
-				const min = String(vnDate.getMinutes()).padStart(2, '0');
-				
-				return `${y}-${m}-${d}T${h}:${min}`;
-			};
-
-			// Helper function to convert datetime-local to MySQL format
-			const toMySQLDateTime = (dateTimeLocalValue) => {
-				if (!dateTimeLocalValue) return null;
-				return dateTimeLocalValue.replace('T', ' ') + ':00';
-			};
-
-			// Set default due date (14 days from now in Vietnam timezone)
-			const dueDateInput = document.getElementById('dueDate');
-			if (dueDateInput) {
-				dueDateInput.value = getVietnamDateTimeLocal(14);
-			}
-
-			// Form submit
-			document.getElementById('rentalForm').addEventListener('submit', async (e) => {
-				e.preventDefault();
-				const form = e.target;
-				const btn = form.querySelector('button[type="submit"]');
-				const original = btn.textContent;
-				btn.disabled = true; 
-				btn.textContent = 'Creating...';
-				
-				// Validate
-				if (!form.user_id.value) {
-					alert('Please select a user.');
-					btn.disabled = false;
-					btn.textContent = original;
-					return;
-				}
-
-				if (rentalBooks.length === 0) {
-					alert('Please select at least one book for the rental.');
-					btn.disabled = false;
-					btn.textContent = original;
-					return;
-				}
-
-				try {
-					const userId = parseInt(form.user_id.value);
-					const dueDate = form.due_date.value ? form.due_date.value.replace('T', ' ') + ':00' : null;
-					const notes = form.notes.value.trim();
-
-					// Build items array for single POST
-					const items = rentalBooks.map(b => ({
-						book_id: b.id,
-						quantity: b.quantity ?? 1,
-						start_date: null,
-						end_date: dueDate
-					}));
-
-					const payload = {
-						user_id: userId,
-						items: items,
-						due_date: dueDate,
-						notes: notes
-					};
-
-					const res = await fetch('api/rentals.php', {
-						method: 'POST',
-						headers: { 'Content-Type': 'application/json' },
-						body: JSON.stringify(payload)
-					});
-
-					const data = await res.json();
-					if (!res.ok || data?.error) {
-						const msg = data?.error || 'Unknown error';
-						alert(`Failed to create rental: ${msg}`);
-					} else {
-						alert('Rental created successfully.');
-						window.location.href = 'index-rental.html?created=1';
-					}
-				} catch (err) {
-					alert(err.message || 'An error occurred while creating rentals.');
-				} finally {
-					btn.disabled = false; 
-					btn.textContent = original;
-				}
-			});
-
-			const MAX_BOOKS = 5; // Maximum number of books allowed
-			const btnAddBook = document.getElementById('addBookBtn');
-			const bookItemsContainer = document.getElementById('booksList');
-
-			const updateAddBookButton = () => {
-				const currentCount = bookItemsContainer.querySelectorAll('.book-item').length;
-				if (currentCount >= MAX_BOOKS) {
-					btnAddBook.disabled = true;
-					btnAddBook.textContent = `Maximum ${MAX_BOOKS} books reached`;
-					btnAddBook.classList.add('btn-secondary');
-					btnAddBook.classList.remove('btn-outline-secondary');
-				} else {
-					btnAddBook.disabled = false;
-					btnAddBook.textContent = '+ Add Book';
-					btnAddBook.classList.remove('btn-secondary');
-					btnAddBook.classList.add('btn-outline-secondary');
-				}
-			};
-
-			const updateRemoveButtons = () => {
-				const items = bookItemsContainer.querySelectorAll('.book-item');
-				items.forEach((item, idx) => {
-					const btn = item.querySelector('.btn-remove-book');
-					btn.disabled = items.length <= 1;
-				});
-				updateAddBookButton(); // Also update add button state
-			};
-
-			btnAddBook.addEventListener('click', () => {
-				const currentCount = bookItemsContainer.querySelectorAll('.book-item').length;
-				if (currentCount >= MAX_BOOKS) {
-					alert(`You can only add up to ${MAX_BOOKS} books per rental.`);
-					return;
-				}
-				
-				const newItem = document.createElement('div');
-				newItem.className = 'book-item row g-2 align-items-end mb-2';
-				newItem.innerHTML = `
-					<div class="col-md-6">
-						<label class="form-label">Book <span class="text-danger">*</span></label>
-						<select name="book_id[]" class="form-select book-select" required>
-							<option value="">-- Select Book --</option>
-						</select>
-					</div>
-					<div class="col-md-3">
-						<label class="form-label">Quantity</label>
-						<input type="number" name="quantity[]" class="form-control" value="1" min="1">
-					</div>
-					<div class="col-md-3">
-						<button type="button" class="btn btn-danger btn-remove-book">Remove</button>
-					</div>
-				`;
-				bookItemsContainer.appendChild(newItem);
-				populateBookSelects();
-				updateRemoveButtons();
-			});
-
-			bookItemsContainer.addEventListener('click', (e) => {
-				if (e.target.classList.contains('btn-remove-book')) {
-					e.target.closest('.book-item').remove();
-					updateRemoveButtons();
-				}
-			});
-
-			// Initialize button states on page load
-			updateRemoveButtons();
-		})();
-	</script>
-	<script>
-		(() => {
-			const form = document.getElementById('rentalForm');
-			const bookItemsContainer = document.getElementById('bookItemsContainer');
-			const btnAddBook = document.getElementById('btnAddBook');
-			
-			// User search elements
-			const userSearchInput = document.getElementById('userSearchInput');
-			const userSearchResults = document.getElementById('userSearchResults');
-			const userIdInput = document.getElementById('userId');
-			const selectedUserContainer = document.getElementById('selectedUserContainer');
-			const selectedUserName = document.getElementById('selectedUserName');
-			const selectedUserEmail = document.getElementById('selectedUserEmail');
-			const clearUserBtn = document.getElementById('clearUserBtn');
-			
-			// New user form elements
-			const newUserContainer = document.getElementById('newUserContainer');
-			const newUserName = document.getElementById('newUserName');
-			const newUserEmail = document.getElementById('newUserEmail');
-			const newUserPhone = document.getElementById('newUserPhone');
-			const newUserUsername = document.getElementById('newUserUsername');
-			const cancelNewUserBtn = document.getElementById('cancelNewUserBtn');
-
-			const MAX_BOOKS = 5;
-			let allBooks = [];
-			let allUsers = [];
-			let searchDebounce;
-			let isCreatingNewUser = false;
-
-			const escapeHtml = (text) => {
-				if (!text) return '';
-				const div = document.createElement('div');
-				div.textContent = text;
-				return div.innerHTML;
 			};
 
 			// Vietnam timezone helper
@@ -855,10 +405,48 @@
 				return `${y}-${m}-${d}T${h}:${min}`;
 			};
 
+			// Format datetime for display - Vietnam timezone
+			const formatDateTimeDisplay = (dateStr) => {
+				if (!dateStr) return '-';
+				const d = new Date(dateStr);
+				return d.toLocaleString('vi-VN', { 
+					hour: '2-digit', 
+					minute: '2-digit',
+					day: '2-digit', 
+					month: '2-digit', 
+					year: 'numeric',
+					timeZone: 'Asia/Ho_Chi_Minh'
+				});
+			};
+
+			// Get current datetime for start date
+			const getCurrentDateTime = () => {
+				const now = new Date();
+				const vnOptions = { 
+					timeZone: 'Asia/Ho_Chi_Minh', 
+					year: 'numeric', 
+					month: '2-digit', 
+					day: '2-digit', 
+					hour: '2-digit', 
+					minute: '2-digit',
+					hour12: false 
+				};
+				const parts = new Intl.DateTimeFormat('en-CA', vnOptions).formatToParts(now);
+				let year = '', month = '', day = '', hour = '', minute = '';
+				parts.forEach(p => {
+					if (p.type === 'year') year = p.value;
+					if (p.type === 'month') month = p.value;
+					if (p.type === 'day') day = p.value;
+					if (p.type === 'hour') hour = p.value;
+					if (p.type === 'minute') minute = p.value;
+				});
+				return `${year}-${month}-${day} ${hour}:${minute}:00`;
+			};
+
 			// Set default due date (14 days from now)
 			document.getElementById('dueDate').value = getVietnamDateTimeLocal(14);
 
-			// Load users
+			// ==================== USER SEARCH ====================
 			const loadUsers = async () => {
 				try {
 					const res = await fetch('api/users.php?per_page=10000');
@@ -870,11 +458,9 @@
 				}
 			};
 
-			// Search users
 			const searchUsers = (query) => {
 				const q = query.toLowerCase().trim();
 				if (!q) return allUsers.slice(0, 10);
-				
 				return allUsers.filter(u => 
 					(u.name && u.name.toLowerCase().includes(q)) ||
 					(u.email && u.email.toLowerCase().includes(q)) ||
@@ -882,58 +468,41 @@
 				).slice(0, 10);
 			};
 
-			// Render search results
 			const renderSearchResults = (users, query) => {
 				let html = '';
-				
 				if (users.length > 0) {
 					html = users.map(u => `
 						<div class="user-search-item" data-user-id="${u.id}" data-name="${escapeHtml(u.name)}" data-email="${escapeHtml(u.email)}">
-							<strong>${escapeHtml(u.name)}</strong>
-							<br>
+							<strong>${escapeHtml(u.name)}</strong><br>
 							<small class="text-muted">${escapeHtml(u.email)}</small>
 						</div>
 					`).join('');
 				}
-				
-				// Always show "Create new user" option
 				if (query.trim()) {
 					html += `
 						<div class="user-search-item create-new" data-action="create-new">
-							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="me-2" viewBox="0 0 16 16">
-								<path d="M1 14s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1H1zm5-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
-								<path fill-rule="evenodd" d="M13.5 5a.5.5 0 0 1 .5.5V7h1.5a.5.5 0 0 1 0 1H14v1.5a.5.5 0 0 1-1 0V8h-1.5a.5.5 0 0 1 0-1H13V5.5a.5.5 0 0 1 .5-.5z"/>
-							</svg>
+							<i class="bi bi-person-plus me-2"></i>
 							Create new user "${escapeHtml(query)}"
 						</div>
 					`;
 				} else if (users.length === 0) {
-					html = `
-						<div class="user-search-item text-muted" style="cursor: default;">
-							No users found. Type to search or create new.
-						</div>
-					`;
+					html = `<div class="user-search-item text-muted" style="cursor: default;">No users found.</div>`;
 				}
-				
 				userSearchResults.innerHTML = html;
 				userSearchResults.classList.add('show');
 				
-				// Attach click handlers
 				userSearchResults.querySelectorAll('.user-search-item[data-user-id]').forEach(item => {
 					item.addEventListener('click', () => selectUser(item.dataset.userId, item.dataset.name, item.dataset.email));
 				});
-				
 				userSearchResults.querySelector('.user-search-item[data-action="create-new"]')?.addEventListener('click', () => {
 					showNewUserForm(query);
 				});
 			};
 
-			// Select existing user
 			const selectUser = (userId, name, email) => {
 				userIdInput.value = userId;
 				selectedUserName.textContent = name;
 				selectedUserEmail.textContent = email;
-				
 				userSearchInput.style.display = 'none';
 				userSearchResults.classList.remove('show');
 				selectedUserContainer.style.display = 'block';
@@ -941,15 +510,12 @@
 				isCreatingNewUser = false;
 			};
 
-			// Show new user form
 			const showNewUserForm = (searchQuery) => {
 				userSearchInput.style.display = 'none';
 				userSearchResults.classList.remove('show');
 				selectedUserContainer.style.display = 'none';
 				newUserContainer.style.display = 'block';
 				isCreatingNewUser = true;
-				
-				// Pre-fill name or email based on search query
 				if (searchQuery.includes('@')) {
 					newUserEmail.value = searchQuery;
 					newUserName.value = '';
@@ -957,12 +523,10 @@
 					newUserName.value = searchQuery;
 					newUserEmail.value = '';
 				}
-				
 				userIdInput.value = '';
 				newUserName.focus();
 			};
 
-			// Clear user selection
 			const clearUserSelection = () => {
 				userIdInput.value = '';
 				userSearchInput.value = '';
@@ -971,19 +535,19 @@
 				newUserContainer.style.display = 'none';
 				isCreatingNewUser = false;
 				newUserName.value = '';
-				newUserEmail.value = '';
-				newUserPhone.value = '';
 				newUserUsername.value = '';
+				newUserEmail.value = '';
+				newUserAge.value = '';
+				newUserLocation.value = '';
+				newUserNote.value = '';
 				userSearchInput.focus();
 			};
 
-			// User search input handler
 			userSearchInput.addEventListener('input', (e) => {
 				clearTimeout(searchDebounce);
 				searchDebounce = setTimeout(() => {
-					const query = e.target.value;
-					const results = searchUsers(query);
-					renderSearchResults(results, query);
+					const results = searchUsers(e.target.value);
+					renderSearchResults(results, e.target.value);
 				}, 200);
 			});
 
@@ -992,123 +556,252 @@
 				renderSearchResults(results, userSearchInput.value);
 			});
 
-			// Hide search results when clicking outside
 			document.addEventListener('click', (e) => {
 				if (!e.target.closest('.user-search-container')) {
 					userSearchResults.classList.remove('show');
 				}
 			});
 
-			// Clear user button
 			clearUserBtn.addEventListener('click', clearUserSelection);
-
-			// Cancel new user button
 			cancelNewUserBtn.addEventListener('click', clearUserSelection);
 
-			// Load books
+			// ==================== BOOK SELECTION ====================
 			const loadBooks = async () => {
 				try {
-					const res = await fetch('api/books.php?per_page=10000');
+					const res = await fetch('api/db.php?limit=10000');
 					const data = await res.json();
-					allBooks = (data.data || data || []).filter(b => !b.deleted_at && b.is_rental == 1 && b.stock > 0);
-					populateBookSelects();
+					const books = data.data || data || [];
+					allBooks = books.filter(b => !b.deleted_at && Number(b.is_rental) === 1 && Number(b.stock) > 0);
+					console.log('Loaded books:', allBooks.length);
 				} catch (e) {
 					console.error('Error loading books:', e);
+					allBooks = [];
 				}
 			};
 
-			const populateBookSelects = () => {
-				const selects = document.querySelectorAll('.book-select');
-				selects.forEach(select => {
-					const currentValue = select.value;
-					select.innerHTML = '<option value="">-- Select Book --</option>' +
-						allBooks.map(b => `<option value="${b.id}">${escapeHtml(b.title)} (Stock: ${b.stock})</option>`).join('');
-					if (currentValue) select.value = currentValue;
-				});
-			};
-
-			const updateAddBookButton = () => {
-				const currentCount = bookItemsContainer.querySelectorAll('.book-item').length;
-				if (currentCount >= MAX_BOOKS) {
-					btnAddBook.disabled = true;
-					btnAddBook.textContent = `Maximum ${MAX_BOOKS} books reached`;
-				} else {
-					btnAddBook.disabled = false;
-					btnAddBook.textContent = '+ Add Book';
+			const renderBookSearchResults = (books) => {
+				if (books.length === 0) {
+					bookSearchResults.innerHTML = '<div class="text-center text-muted py-3">No books found.</div>';
+					return;
 				}
-			};
+				bookSearchResults.innerHTML = books.map(book => {
+					const isAlreadySelected = selectedBooks.some(b => b.id === book.id);
+					const disabledClass = isAlreadySelected ? 'opacity-50' : '';
+					const disabledAttr = isAlreadySelected ? 'style="pointer-events:none;"' : '';
+					const coverCandidates = getCoverCandidates(book.cover_image);
+					const dataSrcs = coverCandidates.map(u => escapeHtml(u)).join('||');
+					return `
+						<div class="book-search-item d-flex align-items-center ${disabledClass}" data-book-id="${book.id}" ${disabledAttr}>
+							<img src="${escapeHtml(coverCandidates[0])}" 
+								 data-srcs="${dataSrcs}"
+								 onerror="window.imgFallback(this)" 
+								 alt="${escapeHtml(book.title)}" class="me-3">
+							<div class="flex-grow-1">
+								<h6 class="mb-1">${escapeHtml(book.title)}</h6>
+								<div class="small text-muted">
+									${escapeHtml(book.author || 'Unknown')} • ${escapeHtml(book.isbn || 'N/A')}
+								</div>
+							</div>
+							${isAlreadySelected ? '<span class="badge bg-secondary">Selected</span>' : ''}
+						</div>
+					`;
+				}).join('');
 
-			const updateRemoveButtons = () => {
-				const items = bookItemsContainer.querySelectorAll('.book-item');
-				items.forEach(item => {
-					const btn = item.querySelector('.btn-remove-book');
-					btn.disabled = items.length <= 1;
+				initImages(bookSearchResults);
+
+				// Attach click handlers
+				bookSearchResults.querySelectorAll('.book-search-item:not(.opacity-50)').forEach(item => {
+					item.addEventListener('click', () => {
+						const bookId = parseInt(item.dataset.bookId);
+						addBookToSelection(bookId);
+					});
 				});
-				updateAddBookButton();
 			};
 
-			btnAddBook.addEventListener('click', () => {
-				const currentCount = bookItemsContainer.querySelectorAll('.book-item').length;
-				if (currentCount >= MAX_BOOKS) {
-					alert(`You can only add up to ${MAX_BOOKS} books per rental.`);
+			const addBookToSelection = (bookId) => {
+				const book = allBooks.find(b => b.id === bookId);
+				if (!book) return;
+				if (selectedBooks.some(b => b.id === bookId)) {
+					alert('This book is already selected.');
+					return;
+				}
+				if (selectedBooks.length >= MAX_BOOKS) {
+					alert(`Maximum ${MAX_BOOKS} books allowed per rental.`);
 					return;
 				}
 				
-				const newItem = document.createElement('div');
-				newItem.className = 'book-item row g-2 align-items-end mb-2';
-				newItem.innerHTML = `
-					<div class="col-md-6">
-						<select name="book_id[]" class="form-select book-select" required>
-							<option value="">-- Select Book --</option>
-						</select>
-					</div>
-					<div class="col-md-3">
-						<input type="number" name="quantity[]" class="form-control" value="1" min="1" placeholder="Qty">
-					</div>
-					<div class="col-md-3">
-						<button type="button" class="btn btn-danger btn-remove-book">Remove</button>
-					</div>
-				`;
-				bookItemsContainer.appendChild(newItem);
-				populateBookSelects();
-				updateRemoveButtons();
-			});
+				// Get current start time and due date
+				const startDate = getCurrentDateTime();
+				const dueDate = document.getElementById('dueDate').value;
+				const endDate = dueDate ? dueDate.replace('T', ' ') + ':00' : null;
+				
+				selectedBooks.push({ 
+					...book, 
+					quantity: 1,
+					start_date: startDate,
+					end_date: endDate
+				});
+				renderSelectedBooks();
+				bookSearchModal.hide();
+				updateAddBookButton();
+			};
 
-			bookItemsContainer.addEventListener('click', (e) => {
-				if (e.target.classList.contains('btn-remove-book')) {
-					e.target.closest('.book-item').remove();
-					updateRemoveButtons();
+			const removeBookFromSelection = (bookId) => {
+				selectedBooks = selectedBooks.filter(b => b.id !== bookId);
+				renderSelectedBooks();
+				updateAddBookButton();
+			};
+
+			const updateBookQuantity = (bookId, quantity) => {
+				const book = selectedBooks.find(b => b.id === bookId);
+				if (book) {
+					book.quantity = Math.max(1, Math.min(quantity, book.stock));
+					renderSelectedBooks();
+				}
+			};
+
+			const renderSelectedBooks = () => {
+				if (selectedBooks.length === 0) {
+					booksEmptyState.style.display = 'block';
+					const cards = selectedBooksContainer.querySelectorAll('.book-item');
+					cards.forEach(c => c.remove());
+					return;
+				}
+				booksEmptyState.style.display = 'none';
+
+				// Update end_date for all books when due date changes
+				const dueDate = document.getElementById('dueDate').value;
+				const endDate = dueDate ? dueDate.replace('T', ' ') + ':00' : null;
+				selectedBooks.forEach(book => {
+					book.end_date = endDate;
+				});
+
+				const canRemove = selectedBooks.length > 1;
+
+				let html = '';
+				selectedBooks.forEach((book, idx) => {
+					const qty = book.quantity ?? 1;
+					const start = book.start_date ? formatDateTimeDisplay(book.start_date) : '-';
+					const end = book.end_date ? formatDateTimeDisplay(book.end_date) : '-';
+					const coverCandidates = getCoverCandidates(book.cover_image);
+					const dataSrcs = coverCandidates.map(u => escapeHtml(u)).join('||');
+					
+					html += `
+						<div class="book-item" data-book-id="${book.id}" data-book-idx="${idx}">
+							<button type="button" class="btn btn-sm btn-danger btn-remove" data-book-id="${book.id}" ${!canRemove ? 'disabled title="Cannot remove - minimum 1 book required"' : ''}>
+								<i class="bi bi-trash"></i> Remove
+							</button>
+							<div class="row align-items-start">
+								<div class="col-auto">
+									<img src="${escapeHtml(coverCandidates[0])}" 
+										 width="80" height="110" loading="lazy" decoding="async"
+										 data-srcs="${dataSrcs}" 
+										 data-src-idx="0"
+										 onerror="window.imgFallback(this)" 
+										 alt="${escapeHtml(book.title || '')}" 
+										 class="book-cover-small" 
+										 style="border: 1px solid #dee2e6;">
+								</div>
+								<div class="col">
+									<h6 class="mb-1">${escapeHtml(book.title || 'N/A')}</h6>
+									<div class="small text-muted">
+										<div><strong>ISBN:</strong> ${escapeHtml(book.isbn || 'N/A')}</div>
+										<div><strong>Author:</strong> ${escapeHtml(book.author || 'N/A')}</div>
+										<div><strong>Quantity:</strong> ${qty}</div>
+										<div><strong>Start:</strong> ${start}</div>
+										<div><strong>End:</strong> ${end}</div>
+									</div>
+								</div>
+							</div>
+						</div>
+					`;
+				});
+				
+				// Remove existing cards and add new ones
+				const existingCards = selectedBooksContainer.querySelectorAll('.book-item');
+				existingCards.forEach(c => c.remove());
+				booksEmptyState.insertAdjacentHTML('beforebegin', html);
+
+				// Attach remove button handlers
+				selectedBooksContainer.querySelectorAll('.btn-remove').forEach(btn => {
+					btn.addEventListener('click', (e) => {
+						e.preventDefault();
+						const bookId = parseInt(btn.dataset.bookId);
+						if (selectedBooks.length <= 1) {
+							alert('Cannot remove - at least 1 book is required for a rental.');
+							return;
+						}
+						if (confirm('Remove this book from the rental?')) {
+							removeBookFromSelection(bookId);
+						}
+					});
+				});
+
+				initImages(selectedBooksContainer);
+			};
+
+			// Update end_date when due date changes
+			document.getElementById('dueDate').addEventListener('change', () => {
+				if (selectedBooks.length > 0) {
+					renderSelectedBooks();
 				}
 			});
 
-			// Create new user API call
+			const updateAddBookButton = () => {
+				if (selectedBooks.length >= MAX_BOOKS) {
+					btnAddBook.disabled = true;
+					btnAddBook.textContent = `Maximum ${MAX_BOOKS} books`;
+				} else {
+					btnAddBook.disabled = false;
+					btnAddBook.textContent = 'Add Book';
+				}
+			};
+
+			// Open book search modal
+			btnAddBook.addEventListener('click', () => {
+				if (selectedBooks.length >= MAX_BOOKS) {
+					alert(`Maximum ${MAX_BOOKS} books allowed per rental.`);
+					return;
+				}
+				bookSearchInput.value = '';
+				renderBookSearchResults(allBooks);
+				bookSearchModal.show();
+				setTimeout(() => bookSearchInput.focus(), 300);
+			});
+
+			// Book search input
+			bookSearchInput.addEventListener('input', (e) => {
+				const query = e.target.value.toLowerCase().trim();
+				const filtered = query 
+					? allBooks.filter(b => 
+						b.title?.toLowerCase().includes(query) ||
+						b.author?.toLowerCase().includes(query) ||
+						b.isbn?.toLowerCase().includes(query)
+					)
+					: allBooks;
+				renderBookSearchResults(filtered);
+			});
+
+			// ==================== FORM SUBMIT ====================
 			const createNewUser = async () => {
 				const name = newUserName.value.trim();
-				const email = newUserEmail.value.trim();
-				const phone = newUserPhone.value.trim();
 				const username = newUserUsername.value.trim();
+				const email = newUserEmail.value.trim();
+				const age = newUserAge.value ? parseInt(newUserAge.value) : null;
+				const location = newUserLocation.value.trim();
+				const note = newUserNote.value.trim();
 
 				if (!name) throw new Error('User name is required');
+				if (!username) throw new Error('Username is required');
 				if (!email) throw new Error('User email is required');
 
 				const res = await fetch('api/users.php', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						name: name,
-						email: email,
-						phone: phone || null,
-						username: username || null,
-						password: 'password123', // Default password
-						role: 'user'
-					})
+					body: JSON.stringify({ name, username, email, age, location: location || null, note: note || null })
 				});
-
 				const data = await res.json();
-				if (!res.ok || data.error) {
-					throw new Error(data.error || 'Failed to create user');
-				}
-
+				if (!res.ok || data.error) throw new Error(data.error || 'Failed to create user');
 				return data.data || data;
 			};
 
@@ -1117,7 +810,6 @@
 
 				let userId = userIdInput.value;
 
-				// If creating new user, create them first
 				if (isCreatingNewUser) {
 					try {
 						const newUser = await createNewUser();
@@ -1134,27 +826,7 @@
 					return;
 				}
 
-				const bookSelects = document.querySelectorAll('.book-select');
-				const quantities = document.querySelectorAll('input[name="quantity[]"]');
-				const items = [];
-				const selectedBookIds = new Set();
-
-				for (let i = 0; i < bookSelects.length; i++) {
-					const bookId = bookSelects[i].value;
-					const qty = parseInt(quantities[i].value) || 1;
-					if (!bookId) {
-						alert('Please select a book for all items.');
-						return;
-					}
-					if (selectedBookIds.has(bookId)) {
-						alert('Duplicate book selected. Please remove duplicates.');
-						return;
-					}
-					selectedBookIds.add(bookId);
-					items.push({ book_id: parseInt(bookId), quantity: qty });
-				}
-
-				if (items.length === 0) {
+				if (selectedBooks.length === 0) {
 					alert('Please add at least one book.');
 					return;
 				}
@@ -1170,6 +842,13 @@
 				btn.textContent = 'Creating...';
 
 				try {
+					const items = selectedBooks.map(b => ({
+						book_id: b.id,
+						quantity: b.quantity,
+						start_date: b.start_date,
+						end_date: b.end_date
+					}));
+
 					const payload = {
 						user_id: parseInt(userId),
 						items: items,
@@ -1197,10 +876,10 @@
 				}
 			});
 
-			// Initialize
+			// ==================== INITIALIZE ====================
 			loadUsers();
 			loadBooks();
-			updateRemoveButtons();
+			updateAddBookButton();
 		})();
 	</script>
 </body>

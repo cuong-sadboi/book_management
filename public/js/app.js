@@ -119,7 +119,25 @@ const API = 'api/db.php';
       tbody.innerHTML = '<tr><td colspan="13">Không có dữ liệu.</td></tr>';
       return;
     }
-    tbody.innerHTML = books.map((book) => `
+    tbody.innerHTML = books.map((book) => {
+      // Sử dụng total_stock và available_stock từ API nếu có
+      // Nếu không, tính từ stock và rented_quantity
+      const rentedQty = parseInt(book.rented_quantity) || 0;
+      const currentStock = parseInt(book.stock) || 0;
+      
+      // total_stock = stock hiện tại + số đang thuê (vì stock đã bị trừ khi cho thuê)
+      const totalStock = parseInt(book.total_stock) || (currentStock + rentedQty);
+      const availableStock = parseInt(book.available_stock) || currentStock;
+      
+      // Xác định màu cho số có thể thuê
+      let availableClass = 'text-success'; // Xanh lá mặc định
+      if (availableStock === 0) {
+        availableClass = 'text-danger'; // Đỏ nếu hết
+      } else if (availableStock <= 2) {
+        availableClass = 'text-warning'; // Vàng nếu sắp hết
+      }
+      
+      return `
       <tr data-id="${book.id ?? ''}">
         <td><input type="checkbox" data-id="${book.id ?? ''}" ${selectedIds.has(String(book.id)) ? 'checked' : ''}></td>
         <td>${escapeHtml(book.isbn ?? '')}</td>
@@ -129,7 +147,7 @@ const API = 'api/db.php';
         <td>${book.year ?? ''}</td>
         <td>${escapeHtml(book.genre ?? '')}</td>
         <td>${currencyFormatter.format(Number(book.price ?? 0))}</td>
-        <td>${book.stock ?? 0}</td>
+        <td><span class="${availableClass} fw-bold">${availableStock}</span><span class="text-muted">/${totalStock}</span></td>
         <td>${escapeHtml(book.status ?? '')}</td>
         <td>${Number(book.is_rental) ? 'Yes' : 'No'}</td>
         <td>${escapeHtml(book.shelf_location ?? '')}</td>
@@ -144,7 +162,7 @@ const API = 'api/db.php';
           </div>
         </td>
       </tr>
-    `).join('');
+    `}).join('');
   }
 
   function renderPagination(total) {

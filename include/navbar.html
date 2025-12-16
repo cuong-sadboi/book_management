@@ -1,7 +1,7 @@
 <nav class="navbar bg-white border-bottom shadow-sm py-2 px-3 px-lg-4">
   <div class="w-100 d-flex align-items-center gap-3">
     <div class="d-flex align-items-center gap-3">
-      <a class="navbar-brand fw-bold text-primary m-0" href="index.html">Book<span class="text-secondary">UI</span></a>
+      <a class="navbar-brand fw-bold text-primary m-0" href="dashboard.html" style="padding-left: 50px;">Book<span class="text-secondary">UI</span></a>
       <button id="sidebarToggle" class="btn btn-light border " type="button" aria-label="Toggle menu">
         <svg width="18" height="18" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M2 4h12M2 8h12M2 12h12" stroke="#5c6c7a" stroke-width="1.5" stroke-linecap="round" />
@@ -9,22 +9,17 @@
       </button>
     </div>
 
-    <form class="flex-grow-1 mx-4 d-none d-md-flex align-items-center border rounded-pill px-3">
-      <svg width="18" height="18" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="7" cy="7" r="5" stroke="#7a8a9a" stroke-width="1.5" />
-        <path d="M11 11l3 3" stroke="#7a8a9a" stroke-width="1.5" stroke-linecap="round" />
-      </svg>
-      <input id="search" class="form-control border-0 ms-2 bg-transparent shadow-none" type="search" placeholder="Search here…" aria-label="Search">
-    </form>
+    <!-- 2 nút Profile và Logout dịch sang phải với ms-auto -->
+    <div class="d-flex align-items-center gap-2 ms-auto">
+      <span class="text-muted d-none d-md-inline">Welcome, <strong id="userName">Admin</strong></span>
 
-    <div class="d-flex align-items-center gap-2">
-      <button class="btn btn-light border " type="button" aria-label="Profile">
+      <a href="dashboard.html" class="btn btn-light border" type="button" aria-label="Profile" title="Profile">
         <svg width="18" height="18" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M8 8a3 3 0 1 0-3-3 3 3 0 0 0 3 3Z" stroke="#1f2a37" stroke-width="1.3"/>
           <path d="M3 13a5 5 0 0 1 10 0" stroke="#1f2a37" stroke-width="1.3" stroke-linecap="round"/>
         </svg>
-      </button>
-      <button class="btn btn-primary " type="button" aria-label="Sign out">
+      </a>
+      <button class="btn btn-primary" id="logoutBtn" type="button" aria-label="Sign out" title="Logout">
         <svg width="18" height="18" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M7 3H4a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3" stroke="#ffffff" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
           <path d="M10 11l3-3-3-3" stroke="#ffffff" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
@@ -34,3 +29,61 @@
     </div>
   </div>
 </nav>
+
+<script>
+(function() {
+  const AUTH_KEY = 'book_management_auth';
+  
+  const getAuth = () => {
+    try {
+      return JSON.parse(localStorage.getItem(AUTH_KEY) || 'null');
+    } catch {
+      return null;
+    }
+  };
+  
+  const clearAuth = () => {
+    localStorage.removeItem(AUTH_KEY);
+  };
+  
+  // Update username display
+  const updateAuthUI = () => {
+    const auth = getAuth();
+    const userNameEl = document.getElementById('userName');
+    if (auth && auth.name && userNameEl) {
+      userNameEl.textContent = auth.name;
+    }
+  };
+  
+  // Logout handler
+  const handleLogout = (e) => {
+    e.preventDefault();
+    if (confirm('Are you sure you want to logout?')) {
+      clearAuth();
+      window.location.href = 'login.html';
+    }
+  };
+  
+  // Initialize
+  const init = () => {
+    updateAuthUI();
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', handleLogout);
+    }
+  };
+  
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+  
+  // Export for global use
+  window.BookAuth = {
+    getAuth,
+    clearAuth,
+    isLoggedIn: () => getAuth() !== null
+  };
+})();
+</script>
