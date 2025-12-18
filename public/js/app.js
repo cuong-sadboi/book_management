@@ -152,13 +152,13 @@ const API = 'api/db.php';
         <td>${Number(book.is_rental) ? 'Yes' : 'No'}</td>
         <td>${escapeHtml(book.shelf_location ?? '')}</td>
         <td>
-          <div class="d-flex flex-column gap-1">
+          <div class="d-flex gap-1">
             <button class="btn-edit btn btn-sm btn-outline-primary d-inline-flex align-items-center justify-content-center" data-id="${book.id ?? ''}" title="Edit" aria-label="Edit">
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-9.5 9.5a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207zM12.5 5.5 10.207 3.207 4 9.414V11h1.586z"/></svg>
             </button>
-            <button class="btn-delete btn btn-sm btn-outline-danger d-inline-flex align-items-center justify-content-center" data-id="${book.id ?? ''}" title="Delete" aria-label="Delete">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z"/></svg>
-            </button>
+            <a href="details.html?id=${encodeURIComponent(book.id)}" class="btn-view btn btn-sm btn-outline-info d-inline-flex align-items-center justify-content-center" data-id="${book.id ?? ''}" title="View Details" aria-label="View Details">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8M1.173 8a13 13 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5s3.879 1.168 5.168 2.457A13 13 0 0 1 14.828 8q-.086.13-.195.288c-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5s-3.879-1.168-5.168-2.457A13 13 0 0 1 1.172 8z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5M4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0"/></svg>
+            </a>
           </div>
         </td>
       </tr>
@@ -287,30 +287,12 @@ const API = 'api/db.php';
   });
 
   tbody.addEventListener('click', (event) => {
-    const deleteBtn = event.target.closest('.btn-delete');
-    if (deleteBtn?.dataset.id) {
-      event.stopPropagation();
-      if (confirm('Are you sure you want to delete this book?')) {
-        const hidden = getHiddenIds();
-        hidden.add(String(deleteBtn.dataset.id));
-        setHiddenIds(hidden);
-        selectedIds.delete(String(deleteBtn.dataset.id));
-        loadBooks();
-      }
-      return;
-    }
-
     const editBtn = event.target.closest('.btn-edit');
     if (editBtn?.dataset.id) {
       event.stopPropagation();
       window.location.href = `update.html?id=${editBtn.dataset.id}`;
       return;
     }
-    const interactive = event.target.closest('input, button, a, label');
-    if (interactive) return;
-    const row = event.target.closest('tr[data-id]');
-    if (!row?.dataset.id) return;
-    window.location.href = `details.html?id=${row.dataset.id}`;
   });
 
   loadBooks();

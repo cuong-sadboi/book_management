@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="vi">
+<head>
+	<meta charset="utf-8">
+	<title>Author Details</title>
+	<meta name="viewport" content="width=device-width,initial-scale=1">
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+	<link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-light d-flex flex-column min-vh-100">
+	<div id="navbarInclude" data-include="../include/navbar.html"></div>
+	<div class="layout-wrapper">
+		<div id="sidebarInclude" data-include="../include/sidebar.html"></div>
+		<div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+		<main class="content-area">
+			<div class="container py-4">
+				<div class="d-flex justify-content-between align-items-center mb-4">
+					<h1 class="text-primary" style="font-size: 25px;">Author Details</h1>
+					<div>
+						<a href="update-author.html" id="btnEdit" class="btn btn-primary">Edit</a>
+						<a href="index-author.html" class="btn btn-outline-secondary">Back to List</a>
+					</div>
+				</div>
+
+				<div class="card shadow-sm" id="authorDetails">
+					<div class="card-body">
+						<p class="text-center text-muted py-5">Loading...</p>
+					</div>
+				</div>
+			</div>
+		</main>
+	</div>
+	<div id="footerInclude" class="layout-footer" data-include="../include/footer.html"></div>
+
+	<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+	<script src="js/layout.js"></script>
+	<script>
+		document.querySelectorAll('[data-include]').forEach((node) => {
+			fetch(node.dataset.include)
+				.then((res) => (res.ok ? res.text() : Promise.reject(res.statusText)))
+				.then((html) => { node.innerHTML = html; window.initLayout?.(); })
+				.catch(() => { node.innerHTML = '<div class="alert alert-warning m-0">Unable to load layout section.</div>'; });
+		});
+	</script>
+	<script>
+		(() => {
+			const params = new URLSearchParams(window.location.search);
+			const authorId = params.get('id');
+			
+			if (!authorId) {
+				document.getElementById('authorDetails').innerHTML = '<div class="card-body"><div class="alert alert-danger">No author ID provided.</div></div>';
+				return;
+			}
+
+			document.getElementById('btnEdit').href = `update-author.html?id=${encodeURIComponent(authorId)}`;
+
+			const escapeHtml = (text) => {
+				if (text === null || text === undefined) return '';
+				const div = document.createElement('div');
+				div.textContent = String(text);
+				return div.innerHTML;
+			};
+
+			fetch(`api/authors.php?id=${encodeURIComponent(authorId)}`)
+				.then(res => res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`))
+				.then(payload => {
+					const author = payload.data || payload;
+					if (!author || !author.id) throw new Error('Author not found');
+
+					document.getElementById('authorDetails').innerHTML = `
+						<div class="card-body">
+							<div class="row g-3">
+								<div class="col-md-6">
+									<label class="form-label fw-bold">Name:</label>
+									<p class="form-control-plaintext">${escapeHtml(author.name)}</p>
+								</div>
+								<div class="col-md-6">
+									<label class="form-label fw-bold">Email:</label>
+									<p class="form-control-plaintext">${escapeHtml(author.email) || '-'}</p>
+								</div>
+								<div class="col-md-6">
+									<label class="form-label fw-bold">Nationality:</label>
+									<p class="form-control-plaintext">${escapeHtml(author.nationality) || '-'}</p>
+								</div>
+								<div class="col-md-6">
+									<label class="form-label fw-bold">Birth Year:</label>
+									<p class="form-control-plaintext">${author.birth_year || '-'}</p>
+								</div>
+								<div class="col-12">
+									<label class="form-label fw-bold">Biography:</label>
+									<p class="form-control-plaintext">${escapeHtml(author.bio) || '-'}</p>
+								</div>
+							</div>
+						</div>
+					`;
+				})
+				.catch(err => {
+					document.getElementById('authorDetails').innerHTML = `<div class="card-body"><div class="alert alert-danger">Error loading author: ${escapeHtml(String(err))}</div></div>`;
+				});
+		})();
+	</script>
+</body>
+</html>
