@@ -1,0 +1,91 @@
+.stat-card {
+	border-radius: 0.75rem;
+	transition: transform 0.2s, box-shadow 0.2s;
+}
+.stat-card:hover {
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.stat-card[data-href] {
+	cursor: pointer;
+}
+.stat-icon {
+	width: 48px;
+	height: 48px;
+	border-radius: 0.5rem;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.stat-number {
+	font-size: 1.75rem;
+	font-weight: 700;
+}
+.activity-item {
+	padding: 0.75rem 0;
+	border-bottom: 1px solid #e9ecef;
+}
+.activity-item:last-child {
+	border-bottom: none;
+}
+.activity-icon {
+	width: 36px;
+	height: 36px;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+}
+.activity-time {
+	font-size: 0.75rem;
+	color: #6c757d;
+}
+.overdue-alert {
+	color: black;
+}
+.progress-stat {
+	height: 8px;
+	border-radius: 4px;
+}
+
+/* Activities Panel - Slide from right */
+.activities-panel {
+	position: fixed;
+	top: var(--navbar-height);
+	right: 0;
+	bottom: 0;
+	width: 380px;
+	background: white;
+	box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+	transform: translateX(100%);
+	transition: transform 0.3s ease;
+	z-index: 1045;
+	overflow-y: auto;
+}
+.activities-panel.show {
+	transform: translateX(0);
+}
+.activities-backdrop {
+	position: fixed;
+	inset: var(--navbar-height) 0 0 0;
+	background: rgba(0,0,0,0.3);
+	z-index: 1044;
+	display: none;
+}
+.activities-backdrop.show {
+	display: block;
+}
+.activities-toggle-btn {
+	position: fixed;
+	top: calc(var(--navbar-height) + 1rem);
+	right: 1rem;
+	z-index: 1046;
+	box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+@media (max-width: 768px) {
+	.activities-panel {
+		width: 90%;
+		max-width: 380px;
+	}
+}
